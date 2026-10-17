@@ -35,10 +35,23 @@ export type Flow = { nodes: { id: string; label: string }[]; edges: { from: stri
 export function flowSkeletons(flow: Flow, cx: number, cy: number, idPrefix = 'ai'): Skeleton[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
   const edges = flow.edges.filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to)
+  // Back edges (found by DFS) stay as arrows but are ignored for layering, so a loop doesn't push nodes to the bottom.
+  const forward: typeof edges = []
+  const state = new Map<string, 'open' | 'done'>()
+  const visit = (id: string) => {
+    state.set(id, 'open')
+    for (const e of edges) {
+      if (e.from !== id) continue
+      if (state.get(e.to) === 'open') continue
+      forward.push(e)
+      if (!state.has(e.to)) visit(e.to)
+    }
+    state.set(id, 'done')
+  }
+  const hasIn = new Set(edges.map((e) => e.to))
+  for (const n of [...flow.nodes.filter((n) => !hasIn.has(n.id)), ...flow.nodes]) if (!state.has(n.id)) visit(n.id)
   const layer = new Map(flow.nodes.map((n) => [n.id, 0]))
-  // Relax n times: enough for any acyclic graph, and a cycle just stops growing instead of looping forever.
-  for (let i = 0; i < flow.nodes.length; i++)
-    for (const e of edges) layer.set(e.to, Math.min(Math.max(layer.get(e.to)!, layer.get(e.from)! + 1), flow.nodes.length - 1))
+  for (let i = 0; i < flow.nodes.length; i++) for (const e of forward) layer.set(e.to, Math.max(layer.get(e.to)!, layer.get(e.from)! + 1))
 
   const rows: string[][] = []
   for (const n of flow.nodes) (rows[layer.get(n.id)!] ??= []).push(n.id)
@@ -66,13 +79,13 @@ export function flowSkeletons(flow: Flow, cx: number, cy: number, idPrefix = 'ai
     const a = pos.get(e.from)!
     const b = pos.get(e.to)!
     const x = a.x + NODE.w / 2
-    const y = a.y + NODE.h
+    const y = a.y + NODE.h / 2
     return {
       type: 'arrow',
       x,
       y,
       width: b.x + NODE.w / 2 - x,
-      height: b.y - y,
+      height: b.y + NODE.h / 2 - y,
       roughness: 0,
       start: { id: `${idPrefix}-${e.from}` },
       end: { id: `${idPrefix}-${e.to}` },

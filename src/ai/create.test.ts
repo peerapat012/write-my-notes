@@ -46,7 +46,11 @@ test('outline: title above bullet block', () => {
   expect((s[1].y as number) > (s[0].y as number)).toBe(true)
 })
 
-test('flow: a cycle does not hang', () => {
-  const nodes = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]
-  expect(flowSkeletons({ nodes, edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }] }, 0, 0)).toHaveLength(4)
+test('flow: a back edge keeps its arrow but does not push the start node down', () => {
+  const nodes = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }]
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'a' }]
+  const s = flowSkeletons({ nodes, edges }, 0, 0)
+  const [a, b, c] = s.filter((e) => e.type === 'rectangle').map((e) => e.y as number)
+  expect(s).toHaveLength(6)
+  expect(a < b && b < c).toBe(true)
 })
