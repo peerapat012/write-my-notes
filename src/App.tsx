@@ -1,3 +1,4 @@
+import { FileText, Folder, Plus, Presentation } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import BoardPage from './BoardPage'
 import DocPage from './DocPage'
@@ -125,12 +126,14 @@ function Node({ node, page, go, create }: { node: TreeNode } & Omit<TreeProps, '
             e.preventDefault()
             go(node.path)
           }}
-          className={`flex-1 truncate rounded px-1 hover:bg-neutral-100 ${page === node.path ? 'bg-neutral-200' : ''}`}
+          className={`flex flex-1 items-center gap-1 truncate rounded px-1 hover:bg-neutral-100 ${page === node.path ? 'bg-neutral-200' : ''}`}
         >
-          {node.icon ?? (node.type === 'doc' ? '📄' : '🎨')} {node.name}
+          {node.icon ?? (node.type === 'doc' ? <FileText size={16} /> : <Presentation size={16} />)} {node.name}
         </a>
       ) : (
-        <span className="flex-1 truncate px-1">📁 {node.name}</span>
+        <span className="flex flex-1 items-center gap-1 truncate px-1">
+          <Folder size={16} /> {node.name}
+        </span>
       )}
       <span className="invisible group-hover:visible">
         <AddMenu onAdd={(type) => create(childDir, type)} />
@@ -147,18 +150,20 @@ function Node({ node, page, go, create }: { node: TreeNode } & Omit<TreeProps, '
 }
 
 function AddMenu({ onAdd }: { onAdd: (type: 'doc' | 'board') => void }) {
+  // Native select keeps the menu accessible; it sits invisible on top of the icon.
   return (
-    <select
-      aria-label="New page"
-      className="w-5 cursor-pointer appearance-none bg-transparent text-center"
-      value=""
-      onChange={(e) => onAdd(e.target.value as 'doc' | 'board')}
-    >
-      <option value="" disabled hidden>
-        +
-      </option>
-      <option value="doc">New doc</option>
-      <option value="board">New board</option>
-    </select>
+    <span className="relative grid size-5 place-items-center rounded hover:bg-neutral-200">
+      <Plus size={14} />
+      <select
+        aria-label="New page"
+        className="absolute inset-0 cursor-pointer opacity-0"
+        value=""
+        onChange={(e) => onAdd(e.target.value as 'doc' | 'board')}
+      >
+        <option value="" disabled hidden />
+        <option value="doc">New doc</option>
+        <option value="board">New board</option>
+      </select>
+    </span>
   )
 }

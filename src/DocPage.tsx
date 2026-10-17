@@ -2,6 +2,7 @@ import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import { SmilePlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { dirty, getFile, saveAsset, writeFile } from './fs'
 import { setIcon, splitFrontMatter } from './frontmatter'
@@ -82,14 +83,16 @@ export default function DocPage({ root, path, onIconChange }: Props) {
   const title = path.slice(path.lastIndexOf('/') + 1, -'.md'.length)
   return (
     <div className="mx-auto max-w-3xl px-16 py-10">
-      <input
-        aria-label="Page icon (Win + . for emoji)"
-        title="Type or paste an emoji (Win + .)"
-        className="mb-2 w-14 rounded bg-transparent text-4xl hover:bg-neutral-100"
-        value={icon ?? ''}
-        placeholder="📄"
-        onChange={(e) => changeIcon(e.target.value)}
-      />
+      <div className="relative mb-2 w-14">
+        <input
+          aria-label="Page icon (Win + . for emoji)"
+          title="Type or paste an emoji (Win + .)"
+          className="w-full rounded bg-transparent text-4xl hover:bg-neutral-100"
+          value={icon ?? ''}
+          onChange={(e) => changeIcon(e.target.value)}
+        />
+        {!icon && <SmilePlus className="pointer-events-none absolute inset-0 m-auto text-neutral-400" size={28} />}
+      </div>
       <h1 className="mb-4 text-4xl font-bold">{title}</h1>
       <div ref={mount} />
     </div>

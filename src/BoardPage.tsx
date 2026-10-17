@@ -11,6 +11,30 @@ import {
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Circle,
+  Diamond,
+  Download,
+  Eraser,
+  Hand,
+  Image,
+  type LucideIcon,
+  Minus,
+  MousePointer2,
+  Pencil,
+  Plus,
+  Presentation,
+  Redo2,
+  Slash,
+  Smile,
+  Sparkles,
+  Square,
+  StickyNote,
+  Type,
+  Undo2,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { swapURLs, toDisk } from './board'
 import { dirty, getFile, saveAsset, writeFile } from './fs'
@@ -19,18 +43,18 @@ import { relativePath, resolvePath } from './paths'
 type Props = { root: FileSystemDirectoryHandle; path: string }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
-const TOOLS: [Tool | 'sticky', string, string][] = [
-  ['selection', '↖', 'Select (V)'],
-  ['hand', '✋', 'Hand (H)'],
-  ['text', 'T', 'Text (T)'],
-  ['freedraw', '✎', 'Pen (P)'],
-  ['sticky', '▢', 'Sticky note (click to place)'],
-  ['rectangle', '▭', 'Rectangle (R)'],
-  ['ellipse', '◯', 'Ellipse (O)'],
-  ['diamond', '◇', 'Diamond (D)'],
-  ['line', '╱', 'Line (L)'],
-  ['arrow', '→', 'Arrow (A)'],
-  ['eraser', '⌫', 'Eraser (E)'],
+const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
+  ['selection', MousePointer2, 'Select (V)'],
+  ['hand', Hand, 'Hand (H)'],
+  ['text', Type, 'Text (T)'],
+  ['freedraw', Pencil, 'Pen (P)'],
+  ['sticky', StickyNote, 'Sticky note (click to place)'],
+  ['rectangle', Square, 'Rectangle (R)'],
+  ['ellipse', Circle, 'Ellipse (O)'],
+  ['diamond', Diamond, 'Diamond (D)'],
+  ['line', Slash, 'Line (L)'],
+  ['arrow', ArrowRight, 'Arrow (A)'],
+  ['eraser', Eraser, 'Eraser (E)'],
 ]
 const EMOJIS = '😀 😂 😍 🤔 😎 😢 😡 👍 👎 👏 🙏 💪 🔥 ⭐ ❤️ ✅ ❌ ⚠️ ❓ 💡 🎉 🚀 📌 📝'.split(' ')
 const STICKY = 200
@@ -210,33 +234,37 @@ export default function BoardPage({ root, path }: Props) {
     <div className="board flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 border-b border-neutral-200 px-2">
         <button className={btn} title="Back" aria-label="Back" onClick={() => history.back()}>
-          ←
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="mr-auto truncate px-2 font-medium">
-          {icon ?? '🎨'} {title}
+        <h1 className="mr-auto flex items-center gap-1.5 truncate px-2 font-medium">
+          {icon ?? <Presentation size={18} />} {title}
         </h1>
         <button className={btn} title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => keys('KeyZ', 'z')}>
-          ↶
+          <Undo2 size={18} />
         </button>
         <button className={btn} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => keys('KeyZ', 'Z', true)}>
-          ↷
+          <Redo2 size={18} />
         </button>
         <span className="mx-2 h-5 border-l border-neutral-200" />
         <button className={btn} title="Zoom out" aria-label="Zoom out" onClick={() => keys('Minus', '-')}>
-          −
+          <Minus size={18} />
         </button>
         <button className={`${btn} w-14 tabular-nums`} title="Reset zoom" onClick={() => keys('Digit0', '0')}>
           {ui.zoom}%
         </button>
         <button className={btn} title="Zoom in" aria-label="Zoom in" onClick={() => keys('Equal', '=')}>
-          +
+          <Plus size={18} />
         </button>
         <span className="mx-2 h-5 border-l border-neutral-200" />
         <button className={btn} disabled title="AI (coming soon)">
-          ✨ AI
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={16} /> AI
+          </span>
         </button>
         <button className={btn} disabled title="Export (coming soon)">
-          Export
+          <span className="flex items-center gap-1.5">
+            <Download size={16} /> Export
+          </span>
         </button>
       </header>
       <div
@@ -253,8 +281,8 @@ export default function BoardPage({ root, path }: Props) {
             canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false },
           }}
         />
-        <nav className="absolute top-1/2 left-3 z-10 flex [font-variant-emoji:text] -translate-y-1/2 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
-          {TOOLS.map(([type, icon, label]) => (
+        <nav className="absolute top-1/2 left-3 z-10 flex -translate-y-1/2 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
+          {TOOLS.map(([type, Icon, label]) => (
             <button
               key={type}
               title={label}
@@ -263,11 +291,11 @@ export default function BoardPage({ root, path }: Props) {
               className={`${btn} ${ui.tool === type ? 'bg-neutral-200 hover:bg-neutral-200' : ''}`}
               onClick={() => board.api()?.setActiveTool(type === 'sticky' ? { type: 'custom', customType: type } : ({ type } as never))}
             >
-              {icon}
+              <Icon size={18} />
             </button>
           ))}
           <button title="Emoji" aria-label="Emoji" aria-expanded={emojis} className={btn} onClick={() => setEmojis((o) => !o)}>
-            ☺
+            <Smile size={18} />
           </button>
           <button
             title="Image (or paste)"
@@ -275,7 +303,7 @@ export default function BoardPage({ root, path }: Props) {
             className={btn}
             onClick={() => board.api()?.setActiveTool({ type: 'image', insertOnCanvasDirectly: true })}
           >
-            ▣
+            <Image size={18} />
           </button>
         </nav>
         {emojis && (

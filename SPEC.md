@@ -21,6 +21,7 @@ A Notion-style notes app for developers, with Excalidraw-based whiteboards and A
 - Web app: React + TypeScript + Vite. Tauri wrapper later.
 - Desktop Chrome/Edge only (File System Access API).
 - Styling: Tailwind CSS v4 (@tailwindcss/vite). No other CSS framework.
+- UI icons: Lucide (`lucide-react`). Page icons chosen by the user stay emoji.
 - Doc editor: Milkdown Crepe (markdown-native, slash menu, block handle).
 - Board engine: `@excalidraw/excalidraw` (MIT), embedded with its default UI hidden.
 - AI: Google Gemini API, called directly from the browser.
