@@ -1,4 +1,4 @@
-import { Loader2, Sparkles, StickyNote, Workflow, ListTree } from 'lucide-react'
+import { FileText, Loader2, Sparkles, StickyNote, Workflow, ListTree } from 'lucide-react'
 import { useState } from 'react'
 import { panel } from '@/components/ui'
 import { NO_KEY } from '@/ai/gemini'
@@ -8,6 +8,7 @@ type Props = {
   selected: number
   onEdit: (instruction: string) => Promise<void>
   onCreate: (mode: Mode, prompt: string, n: number) => Promise<void>
+  onSummarize: () => Promise<void>
 }
 
 const MODES: [Mode, string, typeof Sparkles][] = [
@@ -17,7 +18,7 @@ const MODES: [Mode, string, typeof Sparkles][] = [
 ]
 
 /** Top-bar AI popover: a prompt and the actions that use it. */
-export default function AiPanel({ selected, onEdit, onCreate }: Props) {
+export default function AiPanel({ selected, onEdit, onCreate, onSummarize }: Props) {
   const [prompt, setPrompt] = useState('')
   const [n, setN] = useState(6)
   const [busy, setBusy] = useState<string>()
@@ -67,6 +68,10 @@ export default function AiPanel({ selected, onEdit, onCreate }: Props) {
           </button>
         ))}
       </div>
+      <button className={`${action} border border-neutral-200 hover:bg-neutral-100`} disabled={!!busy || noKey} onClick={() => run('summary', onSummarize)}>
+        {busy === 'summary' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+        {busy === 'summary' ? 'Summarizing…' : 'Summarize this board'}
+      </button>
       {error && (
         <p role="alert" className="text-[13px] text-red-600">
           {error}

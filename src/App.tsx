@@ -6,7 +6,7 @@ import { INVALID } from '@/components/NameInput'
 import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
-import { createPage, deletePaths, dirty, flushes, listEntries, loadRoot, movePage, saveRoot } from '@/lib/fs'
+import { createPage, deletePaths, dirty, flushes, getFile, listEntries, loadRoot, movePage, saveRoot, writeFile } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
@@ -188,6 +188,20 @@ export default function App() {
     go(path)
   }
 
+  /** Creates `<board> summary.md` next to the board (never overwriting one), fills it, and opens it. */
+  async function saveSummary(board: string, body: string) {
+    if (!root) return
+    const dir = parentOf(board)
+    const base = board.slice(board.lastIndexOf('/') + 1, -'.excalidraw'.length) + ' summary'
+    let name = base
+    for (let i = 2; exists.has(join(dir, name + '.md')); i++) name = `${base} ${i}`
+    const path = await createPage(root, dir, name, 'doc')
+    const file = await getFile(root, path)
+    await writeFile(file, (await (await file.getFile()).text()) + body) // keeps the `created` front matter
+    await open(root)
+    go(path)
+  }
+
   const newPage = (
     <>
       <button className={secondaryButton} onClick={() => create('', 'doc')}>
@@ -243,7 +257,7 @@ export default function App() {
             onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} root={root} path={page} dark={dark} model={settings.model} go={go} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} root={root} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
         ) : loading ? null : root ? (
           <EmptyState icon={FileText} title="No page open" actions={newPage}>
             Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.

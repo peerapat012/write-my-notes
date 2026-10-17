@@ -39,6 +39,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
 import { createContent, type Mode } from '@/ai/create'
+import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
 import AiPanel from './AiPanel'
 import { cardText, toDisk } from './board'
 import { readBoard, readText } from './readBoard'
@@ -48,7 +49,7 @@ import NameInput from '@/components/NameInput'
 import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; model: string; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -167,7 +168,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, dark, model, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
@@ -230,6 +231,13 @@ function Board({ root, path, dark, model, go, onRename, reload }: Props & { relo
       elements: restoreElements(elements, null, { refreshDimensions: true, repairBindings: true }), // re-measure text boxes
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     })
+  }
+
+  /** Summarizes all text on the board into a new doc next to it, then opens that doc. */
+  async function summarizeBoard() {
+    const texts = boardTexts(board.api()!.getSceneElements())
+    if (!texts.length) throw new Error('Nothing to summarize: the board has no text.')
+    await onSummary(summaryDoc(path.slice(path.lastIndexOf('/') + 1), await summarize(model, texts)))
   }
 
   const center = () => {
@@ -440,7 +448,7 @@ function Board({ root, path, dark, model, go, onRename, reload }: Props & { relo
             ))}
           </div>
         )}
-        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} />}
+        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} onSummarize={summarizeBoard} />}
         {ui.selected > 0 && (
           <div
             className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
