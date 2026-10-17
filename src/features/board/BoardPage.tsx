@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
+import { createContent, type Mode } from '@/ai/create'
 import AiPanel from './AiPanel'
 import { cardText, toDisk } from './board'
 import { readBoard, readText } from './readBoard'
@@ -213,7 +214,7 @@ function Board({ root, path, dark, model, go, onRename, reload }: Props & { relo
     const added = convertToExcalidrawElements(skeletons)
     a.updateScene({
       elements: [...a.getSceneElementsIncludingDeleted(), ...added],
-      appState: { selectedElementIds: { [added[0].id]: true }, activeTool: { ...a.getAppState().activeTool, type: 'selection', customType: null } } as AppState,
+      appState: { selectedElementIds: Object.fromEntries(added.filter((e) => !('containerId' in e && e.containerId)).map((e) => [e.id, true])), activeTool: { ...a.getAppState().activeTool, type: 'selection', customType: null } } as AppState,
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     })
   }
@@ -231,11 +232,20 @@ function Board({ root, path, dark, model, go, onRename, reload }: Props & { relo
     })
   }
 
+  const center = () => {
+    const { width, height, scrollX, scrollY, zoom } = board.api()!.getAppState()
+    return { x: width / 2 / zoom.value - scrollX, y: height / 2 / zoom.value - scrollY }
+  }
+
+  /** Generates `mode` content from the prompt at the viewport centre; one undo step removes it. */
+  async function create(mode: Mode, prompt: string, n: number) {
+    const { x, y } = center()
+    add((await createContent(model, mode, prompt, n, x, y)) as never)
+  }
+
   function placeEmoji(emoji: string) {
     setEmojis(false)
-    const { width, height, scrollX, scrollY, zoom } = board.api()!.getAppState()
-    const x = width / 2 / zoom.value - scrollX
-    const y = height / 2 / zoom.value - scrollY
+    const { x, y } = center()
     add([{ type: 'text', text: emoji, fontSize: 64, x: x - 40, y: y - 40 }])
   }
 
@@ -430,7 +440,7 @@ function Board({ root, path, dark, model, go, onRename, reload }: Props & { relo
             ))}
           </div>
         )}
-        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} />}
+        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} />}
         {ui.selected > 0 && (
           <div
             className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}

@@ -269,7 +269,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
               className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-400"
               onKeyDown={(e) => {
                 const input = e.currentTarget
-                const tag = input.value.replace(/[,\[\]"']/g, '').trim()
+                const tag = input.value.replace(/[,[\]"']/g, '').trim()
                 if (e.key === 'Enter' && tag) {
                   if (!props.tags.includes(tag)) changeTags([...props.tags, tag])
                   input.value = ''

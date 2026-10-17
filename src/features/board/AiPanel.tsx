@@ -1,27 +1,41 @@
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles, StickyNote, Workflow, ListTree } from 'lucide-react'
 import { useState } from 'react'
 import { panel } from '@/components/ui'
 import { NO_KEY } from '@/ai/gemini'
+import type { Mode } from '@/ai/create'
 
-type Props = { selected: number; onEdit: (instruction: string) => Promise<void> }
+type Props = {
+  selected: number
+  onEdit: (instruction: string) => Promise<void>
+  onCreate: (mode: Mode, prompt: string, n: number) => Promise<void>
+}
+
+const MODES: [Mode, string, typeof Sparkles][] = [
+  ['sticky', 'Sticky notes', StickyNote],
+  ['flow', 'Flow diagram', Workflow],
+  ['outline', 'Outline', ListTree],
+]
 
 /** Top-bar AI popover: a prompt and the actions that use it. */
-export default function AiPanel({ selected, onEdit }: Props) {
+export default function AiPanel({ selected, onEdit, onCreate }: Props) {
   const [prompt, setPrompt] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [n, setN] = useState(6)
+  const [busy, setBusy] = useState<string>()
   const [error, setError] = useState('')
   const noKey = !import.meta.env.VITE_GEMINI_API_KEY
 
-  async function run() {
-    setBusy(true)
+  async function run(what: string, action: () => Promise<void>) {
+    setBusy(what)
     setError('')
     try {
-      await onEdit(prompt.trim())
+      await action()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-    setBusy(false)
+    setBusy(undefined)
   }
+  const off = !!busy || noKey || !prompt.trim()
+  const action = 'flex h-8 items-center justify-center gap-1.5 rounded-md text-[13px] font-medium transition-opacity disabled:opacity-40'
 
   return (
     <div role="dialog" aria-label="AI" className={`${panel} absolute top-3 right-3 z-30 flex w-80 flex-col gap-2 p-3`}>
@@ -35,14 +49,24 @@ export default function AiPanel({ selected, onEdit }: Props) {
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
       />
-      <button
-        className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-neutral-900 text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
-        disabled={busy || noKey || !selected || !prompt.trim()}
-        onClick={run}
-      >
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-        {busy ? 'Editing…' : `Edit ${selected} selected`}
+      <button className={`${action} bg-neutral-900 text-white`} disabled={off || !selected} onClick={() => run('edit', () => onEdit(prompt.trim()))}>
+        {busy === 'edit' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+        {busy === 'edit' ? 'Editing…' : `Edit ${selected} selected`}
       </button>
+      <div className="mt-1 text-[12px] font-medium text-neutral-500">Create new</div>
+      <label className="flex items-center gap-2 text-[13px] text-neutral-700">
+        Items
+        <input type="range" min={1} max={12} value={n} onChange={(e) => setN(+e.target.value)} className="flex-1" />
+        <span className="w-5 tabular-nums">{n}</span>
+      </label>
+      <div className="grid grid-cols-3 gap-1">
+        {MODES.map(([mode, label, Icon]) => (
+          <button key={mode} className={`${action} flex-col border border-neutral-200 py-1.5 hover:bg-neutral-100`} disabled={off} onClick={() => run(mode, () => onCreate(mode, prompt.trim(), n))}>
+            {busy === mode ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+            {label}
+          </button>
+        ))}
+      </div>
       {error && (
         <p role="alert" className="text-[13px] text-red-600">
           {error}
