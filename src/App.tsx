@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DocPage from './DocPage'
 import { createPage, listEntries, loadRoot, saveRoot } from './fs'
 import { buildTree, type TreeNode } from './tree'
 
@@ -79,7 +80,13 @@ export default function App() {
           </>
         )}
       </aside>
-      <main className="min-w-0 flex-1 p-8 text-neutral-500">{page ?? 'No page selected'}</main>
+      <main className="min-w-0 flex-1 overflow-auto">
+        {root && page?.endsWith('.md') ? (
+          <DocPage key={page} root={root} path={page} onIconChange={() => open(root)} />
+        ) : (
+          <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
+        )}
+      </main>
     </div>
   )
 }

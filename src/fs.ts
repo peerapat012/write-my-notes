@@ -42,6 +42,22 @@ export async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): 
   return out
 }
 
+/** Paths of open docs with edits not yet written to disk. Ticket 07 reads this. */
+export const dirty = new Set<string>()
+
+export async function getFile(root: FileSystemDirectoryHandle, path: string) {
+  const parts = path.split('/')
+  let dir = root
+  for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part)
+  return dir.getFileHandle(parts.at(-1)!)
+}
+
+export async function writeFile(file: FileSystemFileHandle, text: string) {
+  const w = await file.createWritable()
+  await w.write(text)
+  await w.close()
+}
+
 const EMPTY_BOARD = JSON.stringify(
   { type: 'excalidraw', version: 2, source: 'write-my-notes', elements: [], appState: {}, files: {} },
   null,
@@ -54,10 +70,6 @@ export async function createPage(root: FileSystemDirectoryHandle, dir: string, n
   for (const part of dir.split('/').filter(Boolean)) folder = await folder.getDirectoryHandle(part, { create: true })
   const fileName = name + (type === 'doc' ? '.md' : '.excalidraw')
   const file = await folder.getFileHandle(fileName, { create: true })
-  if ((await file.getFile()).size === 0) {
-    const w = await file.createWritable()
-    await w.write(type === 'doc' ? '' : EMPTY_BOARD)
-    await w.close()
-  }
+  if (type === 'board' && (await file.getFile()).size === 0) await writeFile(file, EMPTY_BOARD)
   return dir ? `${dir}/${fileName}` : fileName
 }

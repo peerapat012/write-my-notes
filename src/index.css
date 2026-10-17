@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Crepe pads the editor 60px 120px; align it with the page title instead. */
+main .milkdown .ProseMirror {
+  padding: 0;
+}
