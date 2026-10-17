@@ -1,6 +1,6 @@
 # 16 — UI/UX polish
 
-**Depends on:** 11
+**Depends on:** 11, 20
 
 ## Goal
 Give the app one calm, consistent look across every surface. This ticket changes look and UX only. It adds no features.

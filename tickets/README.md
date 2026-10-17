@@ -26,7 +26,8 @@ When a ticket is done, its tests pass, and its acceptance checks pass:
 | 13 | [AI: generate sticky / flow / outline](13-ai-generate.md) | 12 |
 | 14 | [AI: summarize board to doc](14-ai-summarize.md) | 12, 03 |
 | 15 | [Export PNG/SVG](15-export.md) | 05 |
-| 16 | [UI/UX polish](16-ui-polish.md) | 11 |
+| 16 | [UI/UX polish](16-ui-polish.md) | 11, 20 |
 | 17 | [Delete page](17-delete-page.md) | 08, 16 |
 | 18 | [Block action menu](18-block-menu.md) | 16 |
 | 19 | [Page properties (created, tags)](19-page-properties.md) | 10, 16 |
+| 20 | [Organize `src/` by feature](20-src-structure.md) (do before 16) | 11 |
