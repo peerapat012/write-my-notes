@@ -1,3 +1,6 @@
+import { splitFrontMatter } from './frontmatter'
+import { parseIcon } from './tree'
+
 type Files = Record<string, { dataURL: string }>
 
 /** Replaces each file's `dataURL` with `urls[fileId]` when given; fileIds and other fields stay. */
@@ -13,4 +16,24 @@ export function toDisk(json: string, icon?: string, links: Record<string, string
   const scene = JSON.parse(json)
   if (scene.files) scene.files = swapURLs(scene.files, links)
   return JSON.stringify(icon ? { ...scene, icon } : scene, null, 2)
+}
+
+/** Doc card text: icon + title, then the doc's first `n` non-empty lines without markdown syntax. No markdown = broken link. */
+export function cardText(path: string, markdown?: string, n = 3) {
+  const title = path.slice(path.lastIndexOf('/') + 1, -'.md'.length)
+  if (markdown === undefined) return `⚠️ ${title}\nBroken link: doc not found`
+  const lines = splitFrontMatter(markdown)
+    .body.split('\n')
+    .filter((l) => !l.trimStart().startsWith('```'))
+    .map((l) =>
+      l
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links keep their text
+        .replace(/^\s*(#+|[-*+]( \[[ x]\])?|\d+\.|>)\s+/, '')
+        .replace(/[*_`~]/g, '')
+        .trim(),
+    )
+    .filter(Boolean)
+    .slice(0, n)
+  return [`${parseIcon(path, markdown) ?? '📄'} ${title}`, ...lines].join('\n')
 }

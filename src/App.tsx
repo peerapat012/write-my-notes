@@ -134,7 +134,7 @@ export default function App() {
             onIconChange={() => open(root)}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} root={root} path={page} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} root={root} path={page} go={go} onRename={(name) => rename(page, name)} />
         ) : (
           <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
         )}

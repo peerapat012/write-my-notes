@@ -1,6 +1,7 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
+import { exportToSvg } from '@excalidraw/excalidraw'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import { SmilePlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -10,7 +11,28 @@ import { setIcon, splitFrontMatter } from './frontmatter'
 import { linkTarget } from './links'
 import NameInput from './NameInput'
 import { relativePath, resolvePath } from './paths'
+import { readBoard } from './readBoard'
 import { parseIcon } from './tree'
+
+/** Shown in place of a board embed whose `.excalidraw` file is missing. */
+const brokenBoard = (name: string) =>
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="64"><rect x="1" y="1" width="478" height="62" rx="6" fill="#fef2f2" stroke="#dc2626" stroke-dasharray="6 4"/><text x="240" y="37" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#dc2626">Broken link: board “${name.replace(/[<>&]/g, '')}” not found</text></svg>`,
+  )
+
+/** Blob URL of an SVG preview of board `path`; `previews` maps it back to the board for click-to-open. */
+async function boardPreview(root: FileSystemDirectoryHandle, path: string, previews: Map<string, string>) {
+  try {
+    const { data } = await readBoard(root, path, await (await (await getFile(root, path)).getFile()).text())
+    const svg = await exportToSvg({ elements: data.elements, appState: { ...data.appState, exportBackground: true, viewBackgroundColor: '#ffffff' }, files: data.files })
+    const url = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }))
+    previews.set(url, path)
+    return url
+  } catch {
+    return brokenBoard(path.slice(path.lastIndexOf('/') + 1))
+  }
+}
 
 type Props = {
   root: FileSystemDirectoryHandle
@@ -28,6 +50,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
   const [broken, setBroken] = useState('') // CSS selector list of links whose target is missing
+  const previews = useRef(new Map<string, string>()) // board preview blob URL -> board path
 
   useEffect(() => {
     let crepe: Crepe | undefined
@@ -73,7 +96,9 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
             proxyDomURL: async (url) =>
               /^[a-z]+:/i.test(url)
                 ? url
-                : getFile(root, resolvePath(path, url)).then((h) => h.getFile()).then(URL.createObjectURL, () => url),
+                : resolvePath(path, url).endsWith('.excalidraw')
+                  ? boardPreview(root, resolvePath(path, url), previews.current)
+                  : getFile(root, resolvePath(path, url)).then((h) => h.getFile()).then(URL.createObjectURL, () => url),
           },
         },
       })
@@ -136,6 +161,8 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   }, [path, exists])
 
   function openLink(e: React.MouseEvent) {
+    const board = previews.current.get((e.target as HTMLElement).closest('img')?.src ?? '')
+    if (board) return go(board)
     const href = (e.target as HTMLElement).closest('a')?.getAttribute('href')
     const target = href ? linkTarget(path, href) : undefined
     if (target && exists.has(target)) {

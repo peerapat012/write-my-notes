@@ -7,10 +7,11 @@ import {
   newElementWith,
   restoreElements,
   serializeAsJSON,
+  viewportCoordsToSceneCoords,
 } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
+import type { AppState, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
 import {
   ArrowLeft,
   ArrowRight,
@@ -36,13 +37,14 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { swapURLs, toDisk } from './board'
+import { cardText, toDisk } from './board'
+import { readBoard, readText } from './readBoard'
 import ConflictDialog from './ConflictDialog'
 import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from './fs'
 import NameInput from './NameInput'
 import { relativePath, resolvePath } from './paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; onRename: (name: string) => void }
+type Props = { root: FileSystemDirectoryHandle; path: string; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -60,6 +62,7 @@ const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
 ]
 const EMOJIS = '😀 😂 😍 🤔 😎 😢 😡 👍 👎 👏 🙏 💪 🔥 ⭐ ❤️ ✅ ❌ ⚠️ ❓ 💡 🎉 🚀 📌 📝'.split(' ')
 const STICKY = 200
+const CARD = 260 // doc card width
 
 const FILLS = ['transparent', '#ffec99', '#b2f2bb', '#a5d8ff', '#ffc9c9', '#e9ecef']
 const SIZES = [14, 18, 24, 34, 48]
@@ -114,19 +117,10 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
       file = await getFile(root, path)
       const disk = await file.getFile()
       known = disk.lastModified
-      const data = JSON.parse(await disk.text())
-      icon = data.icon
-      const urls: Record<string, string> = {}
-      for (const [id, f] of Object.entries((data.files ?? {}) as BinaryFiles)) {
-        if (f.dataURL.startsWith('data:')) continue
-        links[id] = f.dataURL
-        try {
-          urls[id] = await dataURL(await (await getFile(root, resolvePath(path, f.dataURL))).getFile())
-        } catch {
-          console.warn('missing board image', f.dataURL) // keep the link so the next save doesn't drop it
-        }
-      }
-      return { ...data, files: swapURLs(data.files ?? {}, urls) }
+      const board = await readBoard(root, path, await disk.text())
+      links = board.links
+      icon = board.data.icon
+      return board.data
     },
     changed(elements: readonly ExcalidrawElement[]) {
       const v = getSceneVersion(elements)
@@ -163,21 +157,13 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
   }
 }
 
-const dataURL = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(blob)
-  })
-
 // Keyed by `rev` so a reload from disk remounts Excalidraw with fresh initialData.
 export default function BoardPage(props: Props) {
   const [rev, setRev] = useState(0)
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, onRename, reload }: Props & { reload: () => void }) {
+function Board({ root, path, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
@@ -258,6 +244,44 @@ function Board({ root, path, onRename, reload }: Props & { reload: () => void })
     )
   }
 
+  // Sidebar drag (`text/x-page`, ticket 08) of a doc onto the board: add a doc card where it was dropped.
+  async function dropDoc(e: React.DragEvent) {
+    const doc = e.dataTransfer.getData('text/x-page')
+    if (!doc.endsWith('.md')) return
+    e.preventDefault()
+    e.stopPropagation() // keep Excalidraw's own drop handler out of it
+    const { x, y } = viewportCoordsToSceneCoords(e, board.api()!.getAppState())
+    add([
+      {
+        type: 'rectangle',
+        x: x - CARD / 2,
+        y: y - 20,
+        width: CARD,
+        height: 100,
+        backgroundColor: '#ffffff',
+        fillStyle: 'solid',
+        strokeColor: '#a3a3a3',
+        roughness: 0,
+        roundness: { type: 3 },
+        customData: { docPath: relativePath(path, doc) },
+        label: { text: cardText(doc, await readText(root, doc)), fontSize: 16, fontFamily: FONT_FAMILY.Nunito, textAlign: 'left', verticalAlign: 'top' },
+      },
+    ])
+  }
+
+  // Double-click on a doc card opens its doc (instead of Excalidraw's text editing).
+  function openCard(e: React.MouseEvent) {
+    const a = board.api()!
+    const { x, y } = viewportCoordsToSceneCoords(e, a.getAppState())
+    const card = a
+      .getSceneElements()
+      .findLast((el) => el.customData?.docPath && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height)
+    if (!card) return
+    e.stopPropagation()
+    const target = resolvePath(path, card.customData!.docPath)
+    getFile(root, target).then(() => go(target), () => {}) // broken card: stay
+  }
+
   // Excalidraw has no API for undo/redo/zoom; send it the same shortcuts the keyboard would.
   const keys = (code: string, key: string, shiftKey = false) =>
     box.current!.querySelector('.excalidraw')!.dispatchEvent(new KeyboardEvent('keydown', { code, key, ctrlKey: true, shiftKey, bubbles: true }))
@@ -318,6 +342,9 @@ function Board({ root, path, onRename, reload }: Props & { reload: () => void })
       <div
         ref={box}
         className="relative flex-1"
+        onDragOverCapture={(e) => e.dataTransfer.types.includes('text/x-page') && e.preventDefault()}
+        onDropCapture={dropDoc}
+        onDoubleClickCapture={openCard}
         style={{ backgroundImage: 'radial-gradient(#a3a3a3 1px, transparent 1px)', backgroundSize: '20px 20px' }}
       >
         <Excalidraw
