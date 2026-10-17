@@ -243,7 +243,7 @@ export default function App() {
             onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} root={root} path={page} dark={dark} go={go} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} root={root} path={page} dark={dark} model={settings.model} go={go} onRename={(name) => rename(page, name)} />
         ) : loading ? null : root ? (
           <EmptyState icon={FileText} title="No page open" actions={newPage}>
             Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.

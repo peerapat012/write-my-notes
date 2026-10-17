@@ -37,6 +37,8 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
+import AiPanel from './AiPanel'
 import { cardText, toDisk } from './board'
 import { readBoard, readText } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
@@ -45,7 +47,7 @@ import NameInput from '@/components/NameInput'
 import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; model: string; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -164,12 +166,13 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ root, path, dark, model, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
-  const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: false })
+  const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [ready, setReady] = useState(false) // first scene rendered; shows the loading state until then
   const [initialData] = useState(async (): Promise<ExcalidrawInitialDataState> => {
     const data = await board.load()
@@ -197,7 +200,7 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
     const style = box.current!.style
     style.backgroundSize = `${20 * z}px ${20 * z}px`
     style.backgroundPosition = `${app.scrollX * z}px ${app.scrollY * z}px`
-    const next = { tool: app.activeTool.customType ?? app.activeTool.type, zoom: Math.round(z * 100), selected: Object.keys(app.selectedElementIds).length > 0 }
+    const next = { tool: app.activeTool.customType ?? app.activeTool.type, zoom: Math.round(z * 100), selected: Object.keys(app.selectedElementIds).length }
     setUi((u) => (u.tool === next.tool && u.zoom === next.zoom && u.selected === next.selected ? u : next))
     setReady(true)
 
@@ -211,6 +214,19 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
     a.updateScene({
       elements: [...a.getSceneElementsIncludingDeleted(), ...added],
       appState: { selectedElementIds: { [added[0].id]: true }, activeTool: { ...a.getAppState().activeTool, type: 'selection', customType: null } } as AppState,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
+  }
+
+  /** Sends the selected elements' text to Gemini and writes the answer back as one undo step. */
+  async function editSelected(instruction: string) {
+    const a = board.api()!
+    const texts = selectedTexts(a.getSceneElements(), a.getAppState().selectedElementIds)
+    if (!texts.length) throw new Error('Nothing to edit: the selection has no text.')
+    const edits = await editTexts(model, instruction, texts)
+    const elements = applyEdits(a.getSceneElementsIncludingDeleted(), edits)
+    a.updateScene({
+      elements: restoreElements(elements, null, { refreshDimensions: true, repairBindings: true }), // re-measure text boxes
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     })
   }
@@ -337,7 +353,7 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
           <Plus size={16} />
         </button>
         <span className="mx-1.5 h-5 border-l border-neutral-200" />
-        <button className={textBtn} disabled title="AI (coming soon)">
+        <button className={textBtn} title="AI" aria-expanded={aiOpen} onClick={() => setAiOpen((o) => !o)}>
           <span className="flex items-center gap-1.5">
             <Sparkles size={16} /> AI
           </span>
@@ -414,7 +430,8 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
             ))}
           </div>
         )}
-        {ui.selected && (
+        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} />}
+        {ui.selected > 0 && (
           <div
             className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
           >
