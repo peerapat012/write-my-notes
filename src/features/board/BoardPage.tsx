@@ -149,18 +149,23 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
     async check(ask: () => Promise<boolean>, reload: () => void) {
       if (!file || checking) return
       checking = true
-      await writing
-      const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
-      if (action !== 'ignore') {
-        clearTimeout(timer) // no autosave over the disk version while we decide
-        timer = undefined
-        if (action === 'ask' && !(await ask())) save()
-        else {
-          dirty.delete(path)
-          reload()
+      try {
+        await writing
+        const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
+        if (action !== 'ignore') {
+          clearTimeout(timer) // no autosave over the disk version while we decide
+          timer = undefined
+          if (action === 'ask' && !(await ask())) save()
+          else {
+            dirty.delete(path)
+            reload()
+          }
         }
+      } catch {
+        // file deleted or renamed outside the app: nothing to compare against
+      } finally {
+        checking = false
       }
-      checking = false
     },
   }
 }

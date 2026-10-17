@@ -91,18 +91,23 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
     async function onFocus() {
       if (!file || checking) return
       checking = true
-      await writing
-      const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
-      if (action !== 'ignore') {
-        clearTimeout(timer) // no autosave over the disk version while we decide
-        timer = undefined
-        if (action === 'ask' && !(await new Promise<boolean>((r) => setConflict(() => r)))) save.current()
-        else {
-          dirty.delete(path)
-          setRev((r) => r + 1)
+      try {
+        await writing
+        const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
+        if (action !== 'ignore') {
+          clearTimeout(timer) // no autosave over the disk version while we decide
+          timer = undefined
+          if (action === 'ask' && !(await new Promise<boolean>((r) => setConflict(() => r)))) save.current()
+          else {
+            dirty.delete(path)
+            setRev((r) => r + 1)
+          }
         }
+      } catch {
+        // file deleted or renamed outside the app: nothing to compare against
+      } finally {
+        checking = false
       }
-      checking = false
     }
 
     getFile(root, path).then(async (handle) => {

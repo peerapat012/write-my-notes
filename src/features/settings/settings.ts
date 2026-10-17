@@ -1,7 +1,7 @@
 export type Theme = 'light' | 'dark' | 'system'
 export type Settings = { theme: Theme; model: string }
 
-export const DEFAULT_MODEL = 'gemini-3.6-flash'
+export const DEFAULT_MODEL = 'gemini-3.5-flash'
 const KEY = 'write-my-notes:settings'
 
 /** Settings from `localStorage`, with defaults for anything missing or invalid. */
