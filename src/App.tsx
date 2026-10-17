@@ -29,9 +29,16 @@ export default function App() {
   }, [])
 
   async function pickFolder() {
-    const dir = await showDirectoryPicker({ mode: 'readwrite' })
-    await saveRoot(dir)
-    open(dir)
+    if (!('showDirectoryPicker' in window)) {
+      return alert('This browser cannot open folders. Use desktop Chrome or Edge on http://localhost.')
+    }
+    try {
+      const dir = await showDirectoryPicker({ mode: 'readwrite' })
+      await saveRoot(dir)
+      await open(dir)
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') alert(`Could not open folder: ${e}`)
+    }
   }
 
   async function reopen() {
