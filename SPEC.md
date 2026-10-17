@@ -47,6 +47,7 @@ notes/
 - Page icon (emoji):
   - doc: front matter `icon: 🐳`
   - board: top-level `"icon"` field in the `.excalidraw` JSON. The app adds this field after Excalidraw serializes the scene.
+- Doc properties (docs only): front matter `created: 2026-10-17T23:47` (written when the app creates the doc, never backfilled) and `tags: [a, b]`.
 - Images are never embedded as base64:
   - doc: `![](assets/img-<id>.png)`
   - board: the scene's `files` entries point at `assets/` paths. The app loads them into Excalidraw's file store at open time and strips the data URLs before saving.
