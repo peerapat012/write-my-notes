@@ -25,7 +25,7 @@ export function stickySkeletons(notes: string[], cx: number, cy: number): Skelet
     strokeColor: 'transparent',
     roughness: 0,
     roundness: { type: 3 },
-    label: { text, fontSize: 18 },
+    label: { text, fontSize: 18, strokeColor: '#1e1e1e' }, // not inherited: the note's own stroke is transparent
   }))
 }
 
