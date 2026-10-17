@@ -52,10 +52,19 @@ export async function getFile(root: FileSystemDirectoryHandle, path: string) {
   return dir.getFileHandle(parts.at(-1)!)
 }
 
-export async function writeFile(file: FileSystemFileHandle, text: string) {
+export async function writeFile(file: FileSystemFileHandle, data: string | Blob) {
   const w = await file.createWritable()
-  await w.write(text)
+  await w.write(data)
   await w.close()
+}
+
+/** Writes an image to `assets/img-<id>.<ext>` and returns that root-relative path. */
+export async function saveAsset(root: FileSystemDirectoryHandle, image: File) {
+  const ext = image.type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'png'
+  const name = `img-${crypto.randomUUID().slice(0, 8)}.${ext}`
+  const assets = await root.getDirectoryHandle('assets', { create: true })
+  await writeFile(await assets.getFileHandle(name, { create: true }), image)
+  return `assets/${name}`
 }
 
 const EMPTY_BOARD = JSON.stringify(

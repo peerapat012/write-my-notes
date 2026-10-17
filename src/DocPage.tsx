@@ -1,10 +1,11 @@
-import { Crepe } from '@milkdown/crepe'
+import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import { useEffect, useRef, useState } from 'react'
-import { dirty, getFile, writeFile } from './fs'
+import { dirty, getFile, saveAsset, writeFile } from './fs'
 import { setIcon, splitFrontMatter } from './frontmatter'
+import { relativePath, resolvePath } from './paths'
 import { parseIcon } from './tree'
 
 type Props = { root: FileSystemDirectoryHandle; path: string; onIconChange: () => void }
@@ -25,7 +26,20 @@ export default function DocPage({ root, path, onIconChange }: Props) {
       let { front, body } = splitFrontMatter(text)
       setIconState(parseIcon(path, text))
 
-      crepe = new Crepe({ root: mount.current, defaultValue: body })
+      crepe = new Crepe({
+        root: mount.current,
+        defaultValue: body,
+        featureConfigs: {
+          [CrepeFeature.ImageBlock]: {
+            onUpload: async (image) => relativePath(path, await saveAsset(root, image)),
+            // ponytail: blob URLs are never revoked; fine per page view, revoke on unmount if memory grows.
+            proxyDomURL: async (url) =>
+              /^[a-z]+:/i.test(url)
+                ? url
+                : URL.createObjectURL(await (await getFile(root, resolvePath(path, url))).getFile()),
+          },
+        },
+      })
       // Match common hand-written markdown so saves don't churn git diffs.
       crepe.editor.config((ctx) => ctx.update(remarkStringifyOptionsCtx, (o) => ({ ...o, bullet: '-' as const, rule: '-' as const })))
       crepe.on((l) =>
@@ -42,7 +56,8 @@ export default function DocPage({ root, path, onIconChange }: Props) {
         clearTimeout(timer)
         timer = undefined
         if (newIcon) front = setIcon(front, newIcon)
-        const content = front + crepe!.getMarkdown()
+        // Image blocks store their resize ratio as alt text; drop the default so plain `![](...)` stays plain.
+        const content = front + crepe!.getMarkdown().replace(/!\[1\.00\]\(/g, '![](')
         writing = writing.then(() => writeFile(file, content)).then(() => {
           if (!timer) dirty.delete(path)
         })
