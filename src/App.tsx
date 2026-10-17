@@ -6,7 +6,7 @@ import { INVALID } from '@/components/NameInput'
 import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
-import { createPage, deletePaths, dirty, flushes, getFile, listEntries, loadRoot, movePage, saveRoot, writeFile } from '@/lib/fs'
+import { dirty, flushes, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
@@ -28,8 +28,8 @@ const subscribeDark = (cb: () => void) => {
 }
 
 export default function App() {
-  const [root, setRoot] = useState<FileSystemDirectoryHandle>()
-  const [stored, setStored] = useState<FileSystemDirectoryHandle>()
+  const [root, setRoot] = useState<Vault>()
+  const [stored, setStored] = useState<Stored>()
   const [entries, setEntries] = useState<Entry[]>([])
   const tree = useMemo(() => buildTree(entries), [entries])
   const exists = useMemo(() => new Set(entries.map((e) => e.path)), [entries])
@@ -64,23 +64,23 @@ export default function App() {
     })
   }
 
-  async function open(dir: FileSystemDirectoryHandle) {
+  async function open(dir: Vault) {
     setRoot(dir)
-    setEntries(await listEntries(dir))
+    setEntries(await dir.list())
     setLoading(false)
   }
 
   /** Opens a folder the user just picked or re-granted: the tree shows its loading state until scanned. */
-  function openFresh(dir: FileSystemDirectoryHandle) {
+  function openFresh(dir: Vault) {
     setEntries([])
     setLoading(true)
     return open(dir)
   }
 
   useEffect(() => {
-    loadRoot().then(async (dir) => {
-      if (dir && (await dir.queryPermission({ mode: 'readwrite' })) === 'granted') return open(dir)
-      if (dir) setStored(dir) // requestPermission needs a user gesture: show a reopen button
+    restoreVault().then(async ({ vault, stored }) => {
+      if (vault) return open(vault)
+      setStored(stored) // re-granting needs a user gesture: show a reopen button
       setLoading(false)
     })
     const onPop = () => setPage(currentPage())
@@ -107,26 +107,22 @@ export default function App() {
   // Rescan on focus to catch pages added or removed on disk (e.g. by `git pull`).
   useEffect(() => {
     if (!root) return
-    const onFocus = () => listEntries(root).then(setEntries)
+    const onFocus = () => root.list().then(setEntries)
     addEventListener('focus', onFocus)
     return () => removeEventListener('focus', onFocus)
   }, [root])
 
   async function pickFolder() {
-    if (!('showDirectoryPicker' in window)) {
-      return alert('This browser cannot open folders. Use desktop Chrome or Edge on http://localhost.')
-    }
     try {
-      const dir = await showDirectoryPicker({ mode: 'readwrite' })
-      await saveRoot(dir)
-      await openFresh(dir)
+      await openFresh(await pickVault())
     } catch (e) {
       if ((e as Error).name !== 'AbortError') alert(`Could not open folder: ${e}`)
     }
   }
 
   async function reopen() {
-    if (stored && (await stored.requestPermission({ mode: 'readwrite' })) === 'granted') openFresh(stored)
+    const dir = await stored?.reopen()
+    if (dir) openFresh(dir)
   }
 
   function go(path: string) {
@@ -138,7 +134,7 @@ export default function App() {
     if (!root || from === to) return
     try {
       await Promise.all([...flushes].map((f) => f()))
-      await movePage(root, from, to)
+      await root.move(from, to)
     } catch (e) {
       alert(`Could not move: ${e}`)
       return open(root)
@@ -168,7 +164,7 @@ export default function App() {
           setPage(null)
         }
       }
-      await deletePaths(root, paths)
+      await root.delete(paths)
     } catch (e) {
       alert(`Could not delete: ${e}`)
     }
@@ -183,7 +179,7 @@ export default function App() {
   async function createNamed(dir: string, type: 'doc' | 'board', name: string) {
     setNaming(undefined)
     if (!root || !name) return
-    const path = await createPage(root, dir, name, type)
+    const path = await root.createPage(dir, name, type)
     await open(root)
     go(path)
   }
@@ -195,9 +191,8 @@ export default function App() {
     const base = board.slice(board.lastIndexOf('/') + 1, -'.excalidraw'.length) + ' summary'
     let name = base
     for (let i = 2; exists.has(join(dir, name + '.md')); i++) name = `${base} ${i}`
-    const path = await createPage(root, dir, name, 'doc')
-    const file = await getFile(root, path)
-    await writeFile(file, (await (await file.getFile()).text()) + body) // keeps the `created` front matter
+    const path = await root.createPage(dir, name, 'doc')
+    await root.write(path, (await root.read(path)) + body) // keeps the `created` front matter
     await open(root)
     go(path)
   }
@@ -248,7 +243,7 @@ export default function App() {
         {root && page?.endsWith('.md') ? (
           <DocPage
             key={page + rev}
-            root={root}
+            vault={root}
             path={page}
             exists={exists}
             go={go}
@@ -257,7 +252,7 @@ export default function App() {
             onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} root={root} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} vault={root} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
         ) : loading ? null : root ? (
           <EmptyState icon={FileText} title="No page open" actions={newPage}>
             Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.

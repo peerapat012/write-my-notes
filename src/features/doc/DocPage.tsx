@@ -9,7 +9,7 @@ import { CalendarClock, Code, Copy, Heading1, Heading2, Heading3, List, ListOrde
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
 import Menu, { type MenuGroup } from '@/components/Menu'
-import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
+import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { countWords } from './wordCount'
@@ -28,9 +28,9 @@ const brokenBoard = (name: string) =>
   )
 
 /** Blob URL of an SVG preview of board `path`; `previews` maps it back to the board for click-to-open. */
-async function boardPreview(root: FileSystemDirectoryHandle, path: string, previews: Map<string, string>) {
+async function boardPreview(vault: Vault, path: string, previews: Map<string, string>) {
   try {
-    const { data } = await readBoard(root, path, await (await (await getFile(root, path)).getFile()).text())
+    const { data } = await readBoard(vault, path, await vault.read(path))
     const svg = await exportToSvg({ elements: data.elements, appState: { ...data.appState, exportBackground: true, viewBackgroundColor: '#ffffff' }, files: data.files })
     const url = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }))
     previews.set(url, path)
@@ -53,7 +53,7 @@ const TURN_INTO: [BlockKind, string, MenuGroup['items'][number]['icon']][] = [
 ]
 
 type Props = {
-  root: FileSystemDirectoryHandle
+  vault: Vault
   path: string
   exists: Set<string> // every path in the notes folder, for broken-link marks
   go: (path: string) => void
@@ -62,7 +62,7 @@ type Props = {
   onSave: (text: string) => void // keeps the search index current
 }
 
-export default function DocPage({ root, path, exists, go, onRename, onIconChange, onSave }: Props) {
+export default function DocPage({ vault, path, exists, go, onRename, onIconChange, onSave }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
@@ -83,17 +83,17 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
     let crepe: Crepe | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
     let cancelled = false
-    let file: FileSystemFileHandle | undefined
+    let loaded = false
     let known = 0 // lastModified as of our last read or write
     let writing = Promise.resolve()
     let checking = false
 
     async function onFocus() {
-      if (!file || checking) return
+      if (!loaded || checking) return
       checking = true
       try {
         await writing
-        const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
+        const action = diskAction(known, await vault.stat(path), dirty.has(path))
         if (action !== 'ignore') {
           clearTimeout(timer) // no autosave over the disk version while we decide
           timer = undefined
@@ -110,11 +110,11 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       }
     }
 
-    getFile(root, path).then(async (handle) => {
-      const disk = await handle.getFile()
-      const text = await disk.text()
+    ;(async () => {
+      const mtime = await vault.stat(path) // before the read: a change in between makes the next focus check reload
+      const text = await vault.read(path)
       if (cancelled) return
-      known = disk.lastModified
+      known = mtime
       let { front, body } = splitFrontMatter(text)
       setIconState(parseIcon(path, text))
       setProps(getProps(front))
@@ -127,14 +127,14 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
           [CrepeFeature.CodeMirror]: { theme: syntaxHighlighting(classHighlighter) },
           [CrepeFeature.Placeholder]: { text: 'Write, or type / for commands' },
           [CrepeFeature.ImageBlock]: {
-            onUpload: async (image) => relativePath(path, await saveAsset(root, image)),
+            onUpload: async (image) => relativePath(path, await vault.saveAsset(image)),
             // ponytail: blob URLs are never revoked; fine per page view, revoke on unmount if memory grows.
             proxyDomURL: async (url) =>
               /^[a-z]+:/i.test(url)
                 ? url
                 : resolvePath(path, url).endsWith('.excalidraw')
-                  ? boardPreview(root, resolvePath(path, url), previews.current)
-                  : getFile(root, resolvePath(path, url)).then((h) => h.getFile()).then(URL.createObjectURL, () => url),
+                  ? boardPreview(vault, resolvePath(path, url), previews.current)
+                  : vault.readBlob(resolvePath(path, url)).then(URL.createObjectURL, () => url),
           },
         },
       })
@@ -150,7 +150,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       await crepe.create()
       if (!cancelled) setReady(true)
       editor.current = crepe
-      file = handle
+      loaded = true
 
       save.current = (patch) => {
         clearTimeout(timer)
@@ -160,14 +160,14 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
         const content = front + crepe!.getMarkdown().replace(/!\[1\.00\]\(/g, '![](')
         onSaveRef.current(content)
         writing = writing
-          .then(() => writeFile(handle, content))
+          .then(() => vault.write(path, content))
           .then(async () => {
-            known = (await handle.getFile()).lastModified
+            known = await vault.stat(path)
             if (!timer) dirty.delete(path)
           })
         return writing
       }
-    })
+    })()
 
     const flush = () => (timer ? save.current() : writing)
     flushes.add(flush)
@@ -180,7 +180,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       editor.current = undefined
       crepe?.destroy()
     }
-  }, [root, path, rev])
+  }, [vault, path, rev])
 
   // Find links whose target is missing as the editor re-renders and as the folder changes. Styled from a
   // <style> rule, not by touching the editor DOM: ProseMirror would treat attribute changes as edits.

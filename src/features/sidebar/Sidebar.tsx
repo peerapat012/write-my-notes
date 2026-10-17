@@ -18,6 +18,7 @@ import { useState } from 'react'
 import { MenuButton, type MenuGroup } from '@/components/Menu'
 import NameInput from '@/components/NameInput'
 import { iconButton, skeleton } from '@/components/ui'
+import type { Vault } from '@/lib/fs'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import type { TreeNode } from './tree'
 
@@ -26,8 +27,8 @@ type Create = (dir: string, type: 'doc' | 'board') => void
 type Remove = (node: TreeNode) => void
 
 type SidebarProps = {
-  root?: FileSystemDirectoryHandle
-  stored?: FileSystemDirectoryHandle
+  root?: Vault
+  stored?: { name: string }
   loading: boolean
   tree: TreeNode[]
   page: string | null

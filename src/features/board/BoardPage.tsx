@@ -45,14 +45,14 @@ import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
 import AiPanel from './AiPanel'
 import { cardText, exportElements, toDisk } from './board'
 import Menu from '@/components/Menu'
-import { readBoard, readText } from './readBoard'
+import { readBoard } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
-import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
+import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import NameInput from '@/components/NameInput'
 import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { vault: Vault; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -88,9 +88,9 @@ const DEFAULTS: Partial<AppState> = {
 }
 
 /** Loads one board file and autosaves it: 500 ms debounce, serialized writes, `dirty` while unsaved. */
-function boardFile(root: FileSystemDirectoryHandle, path: string) {
+function boardFile(vault: Vault, path: string) {
   let api: ExcalidrawImperativeAPI | undefined
-  let file: FileSystemFileHandle | undefined
+  let loaded = false
   let known = 0 // lastModified as of our last read or write
   let checking = false
   let icon: string | undefined
@@ -109,9 +109,9 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
       .then(async () => {
         for (const [id, f] of Object.entries(files))
           if (!links[id] && f.dataURL.startsWith('data:'))
-            links = { ...links, [id]: relativePath(path, await saveAsset(root, await (await fetch(f.dataURL)).blob())) }
-        await writeFile(file!, toDisk(json, icon, links))
-        known = (await file!.getFile()).lastModified
+            links = { ...links, [id]: relativePath(path, await vault.saveAsset(await (await fetch(f.dataURL)).blob())) }
+        await vault.write(path, toDisk(json, icon, links))
+        known = await vault.stat(path)
       })
       .then(() => {
         if (!timer) dirty.delete(path)
@@ -122,10 +122,9 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
     api: () => api,
     setApi: (a: ExcalidrawImperativeAPI) => void (api = a),
     async load() {
-      file = await getFile(root, path)
-      const disk = await file.getFile()
-      known = disk.lastModified
-      const board = await readBoard(root, path, await disk.text())
+      known = await vault.stat(path)
+      const board = await readBoard(vault, path, await vault.read(path))
+      loaded = true
       links = board.links
       icon = board.data.icon
       return board.data
@@ -147,11 +146,11 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
     },
     /** Window focus: reloads, or asks, if the file changed on disk since we last read or wrote it. */
     async check(ask: () => Promise<boolean>, reload: () => void) {
-      if (!file || checking) return
+      if (!loaded || checking) return
       checking = true
       try {
         await writing
-        const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
+        const action = diskAction(known, await vault.stat(path), dirty.has(path))
         if (action !== 'ignore') {
           clearTimeout(timer) // no autosave over the disk version while we decide
           timer = undefined
@@ -176,9 +175,9 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ vault, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
-  const [board] = useState(() => boardFile(root, path))
+  const [board] = useState(() => boardFile(vault, path))
   const [icon, setIcon] = useState<string>()
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
@@ -325,7 +324,7 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
         roughness: 0,
         roundness: { type: 3 },
         customData: { docPath: relativePath(path, doc) },
-        label: { text: cardText(doc, await readText(root, doc)), fontSize: 16, fontFamily: FONT_FAMILY.Nunito, textAlign: 'left', verticalAlign: 'top' },
+        label: { text: cardText(doc, await vault.read(doc)), fontSize: 16, fontFamily: FONT_FAMILY.Nunito, textAlign: 'left', verticalAlign: 'top' },
       },
     ])
   }
@@ -340,7 +339,7 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
     if (!card) return
     e.stopPropagation()
     const target = resolvePath(path, card.customData!.docPath)
-    getFile(root, target).then(() => go(target), () => {}) // broken card: stay
+    vault.stat(target).then(() => go(target), () => {}) // broken card: stay
   }
 
   // Excalidraw has no API for undo/redo/zoom; send it the same shortcuts the keyboard would.
