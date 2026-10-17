@@ -10,6 +10,7 @@ const button =
   'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40'
 export const primaryButton = `${button} bg-accent text-on-accent hover:bg-accent/90`
 export const secondaryButton = `${button} border border-neutral-200 text-neutral-900 hover:bg-neutral-100`
+export const dangerButton = `${button} bg-red-600 text-white hover:bg-red-700`
 export const ghostButton = `${button} text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900`
 
 export const input =

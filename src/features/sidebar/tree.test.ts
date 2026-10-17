@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { buildTree, parseIcon, type Entry } from './tree'
+import { buildTree, deletion, parseIcon, type Entry } from './tree'
 
 const f = (path: string, icon?: string): Entry => ({ path, kind: 'file', icon })
 const d = (path: string): Entry => ({ path, kind: 'dir' })
@@ -43,4 +43,13 @@ test('parseIcon', () => {
   expect(parseIcon('b.excalidraw', '{"type":"excalidraw","icon":"🎨"}')).toBe('🎨')
   expect(parseIcon('b.excalidraw', '{"type":"excalidraw"}')).toBeUndefined()
   expect(parseIcon('b.excalidraw', 'not json')).toBeUndefined()
+})
+
+test('deletion', () => {
+  const tree = buildTree([f('A.md'), d('A'), f('A/B.md'), d('A/B'), f('A/B/C.excalidraw'), d('A/Plain'), f('A/Plain/D.md'), d('Misc'), f('Misc/E.md')])
+  const [a, misc] = [tree.find((n) => n.name === 'A')!, tree.find((n) => n.name === 'Misc')!]
+  expect(deletion(a)).toEqual({ paths: ['A.md', 'A'], childPages: 3 })
+  expect(deletion(a.children.find((n) => n.name === 'B')!)).toEqual({ paths: ['A/B.md', 'A/B'], childPages: 1 })
+  expect(deletion(misc)).toEqual({ paths: ['Misc'], childPages: 1 })
+  expect(deletion(misc.children[0])).toEqual({ paths: ['Misc/E.md', 'Misc/E'], childPages: 0 })
 })

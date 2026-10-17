@@ -129,3 +129,15 @@ export async function movePage(root: FileSystemDirectoryHandle, from: string, to
   for (const e of moved) if (!moved.some((m) => e.path.startsWith(m.path + '/'))) await moveEntry(root, e.path, movedPath(e.path, from, to))
   for (const [path, text] of Object.entries(rewritten)) await writeFile(await getFile(root, path), text)
 }
+
+/** Permanently removes files and folders (recursively). Paths that are already gone are skipped. */
+export async function deletePaths(root: FileSystemDirectoryHandle, paths: string[]) {
+  for (const path of paths) {
+    const [dir, name] = splitPath(path)
+    try {
+      await (await dirAt(root, dir)).removeEntry(name, { recursive: true })
+    } catch (e) {
+      if ((e as Error).name !== 'NotFoundError') throw e
+    }
+  }
+}

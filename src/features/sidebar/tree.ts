@@ -64,3 +64,10 @@ export function parseIcon(fileName: string, text: string): string | undefined {
     }
   }
 }
+
+/** What deleting `node` removes: its file (or folder), a page's same-name child folder, and how many pages go with it. */
+export function deletion(node: TreeNode) {
+  const pages = (n: TreeNode): number => n.children.reduce((sum, c) => sum + (c.type === 'folder' ? 0 : 1) + pages(c), 0)
+  const paths = node.type === 'folder' ? [node.path] : [node.path, node.path.replace(/\.(md|excalidraw)$/, '')]
+  return { paths, childPages: pages(node) }
+}

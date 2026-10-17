@@ -3,10 +3,10 @@ import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } f
 import Dialog from '@/components/Dialog'
 import EmptyState from '@/components/EmptyState'
 import { INVALID } from '@/components/NameInput'
-import { ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
+import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
-import { createPage, flushes, listEntries, loadRoot, movePage, saveRoot } from '@/lib/fs'
+import { createPage, deletePaths, dirty, flushes, listEntries, loadRoot, movePage, saveRoot } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
@@ -14,7 +14,7 @@ import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
 import Sidebar from '@/features/sidebar/Sidebar'
-import { buildTree, type Entry } from '@/features/sidebar/tree'
+import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
 
 const currentPage = () =>
   location.pathname.startsWith('/page/') ? decodeURIComponent(location.pathname.slice('/page/'.length)) : null
@@ -43,6 +43,8 @@ export default function App() {
   const [settings, setSettings] = useState(() => loadSettings())
   const [showSettings, setShowSettings] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [deleting, setDeleting] = useState<TreeNode>() // delete confirmation dialog
+  const deletingPages = deleting && deletion(deleting).childPages
   const [naming, setNaming] = useState<{ dir: string; type: 'doc' | 'board' }>() // new-page name dialog
   const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
@@ -148,6 +150,31 @@ export default function App() {
     setRev((r) => r + 1)
   }
 
+  /** Deletes a page with its child folder, or a plain folder. Leaves the open page first if it goes too. */
+  async function remove(node: TreeNode) {
+    setDeleting(undefined)
+    if (!root) return
+    const { paths } = deletion(node)
+    const inside = (p: string) => paths.some((d) => p === d || p.startsWith(d + '/'))
+    try {
+      await Promise.all([...flushes].map((f) => f())) // so no pending autosave writes a deleted file back
+      for (const p of [...dirty]) if (inside(p)) dirty.delete(p)
+      if (page && inside(page)) {
+        const dir = parentOf(node.path)
+        const parent = dir && [dir + '.md', dir + '.excalidraw'].find((p) => exists.has(p))
+        if (parent) go(parent)
+        else {
+          history.pushState(null, '', '/')
+          setPage(null)
+        }
+      }
+      await deletePaths(root, paths)
+    } catch (e) {
+      alert(`Could not delete: ${e}`)
+    }
+    await open(root)
+  }
+
   const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
 
   // Asks for the name in a dialog (below), then creates the page and opens it.
@@ -184,6 +211,7 @@ export default function App() {
           go={go}
           create={create}
           move={move}
+          remove={setDeleting}
           reopen={reopen}
           pickFolder={pickFolder}
           openSettings={() => setShowSettings(true)}
@@ -276,6 +304,23 @@ export default function App() {
               <button className={primaryButton}>Create</button>
             </div>
           </form>
+        </Dialog>
+      )}
+      {deleting && (
+        <Dialog aria-label={`Delete ${deleting.name}`} onClose={() => setDeleting(undefined)}>
+          <h2 className="font-semibold">Delete “{deleting.name}”?</h2>
+          <p className="mt-2 text-neutral-700">
+            {!!deletingPages && `This also deletes ${deletingPages} page${deletingPages > 1 ? 's' : ''} inside it. `}
+            The files are removed from disk. Use git to get them back.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button autoFocus className={ghostButton} onClick={() => setDeleting(undefined)}>
+              Cancel
+            </button>
+            <button className={dangerButton} onClick={() => remove(deleting)}>
+              Delete
+            </button>
+          </div>
         </Dialog>
       )}
       {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}

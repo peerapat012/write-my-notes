@@ -12,6 +12,7 @@ import {
   Search,
   Settings as SettingsIcon,
   SquarePen,
+  Trash2,
 } from 'lucide-react'
 import { useState } from 'react'
 import { MenuButton, type MenuGroup } from '@/components/Menu'
@@ -22,6 +23,7 @@ import type { TreeNode } from './tree'
 
 type Move = (from: string, to: string) => void
 type Create = (dir: string, type: 'doc' | 'board') => void
+type Remove = (node: TreeNode) => void
 
 type SidebarProps = {
   root?: FileSystemDirectoryHandle
@@ -32,6 +34,7 @@ type SidebarProps = {
   go: (path: string) => void
   create: Create
   move: Move
+  remove: Remove
   reopen: () => void
   pickFolder: () => void
   openSettings: () => void
@@ -121,6 +124,7 @@ type TreeProps = {
   go: (path: string) => void
   create: Create
   move: Move
+  remove: Remove
 }
 
 /** Drop handler: moves the dragged page or folder into folder `dir`. */
@@ -148,7 +152,7 @@ const rowTarget =
   "min-w-0 flex-1 truncate text-left outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
 
 function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'nodes'>) {
-  const { page, go, create, move } = props
+  const { page, go, create, move, remove } = props
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(true)
   const isPage = node.type !== 'folder'
@@ -218,7 +222,10 @@ function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'n
           <span className="relative z-10 flex opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 has-[[aria-expanded=true]]:opacity-100">
             <MenuButton
               label={`${node.name} actions`}
-              groups={[{ items: [{ label: 'Rename', icon: Pencil, onSelect: () => setEditing(true) }] }]}
+              groups={[
+                { items: [{ label: 'Rename', icon: Pencil, onSelect: () => setEditing(true) }] },
+                { items: [{ label: 'Delete', icon: Trash2, onSelect: () => remove(node) }] },
+              ]}
               className={`${iconButton} size-6 hover:bg-neutral-200`}
             >
               <MoreHorizontal size={15} />
