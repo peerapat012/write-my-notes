@@ -17,7 +17,7 @@ export function resolvePath(from: string, rel: string) {
   return out.join('/')
 }
 
-export const pageUrl = (path: string) => '/page/' + path.split('/').map(encodeURIComponent).join('/')
+export const pageUrl = (path: string) => import.meta.env.BASE_URL + 'page/' + path.split('/').map(encodeURIComponent).join('/')
 export const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0))
 export const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name)
 export const ext = (path: string) => path.match(/\.(md|excalidraw)$/)?.[0] ?? ''

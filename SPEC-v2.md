@@ -42,8 +42,9 @@ Everything in [SPEC.md](SPEC.md) (v1) still holds unless this file says otherwis
 
 ## Web deploy
 
-- A GitHub Actions workflow builds on push to `main` and deploys to GitHub Pages.
-- Vite `base` is set for the Pages sub-path in CI only. Local dev stays at `/`.
+- A GitHub Actions workflow builds on push to `main` and deploys to GitHub Pages: https://peerapat012.github.io/write-my-notes/
+- Vite `base` is set for the Pages sub-path in CI only (`BASE=/write-my-notes/`). Local dev stays at `/`. Page URLs (`/page/...`) are built from `import.meta.env.BASE_URL`.
+- Pages has no SPA fallback, so CI copies `index.html` to `404.html` to make deep links and reloads work.
 - The web build has no git UI.
 
 ## Desktop (Tauri)

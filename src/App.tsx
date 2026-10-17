@@ -16,8 +16,9 @@ import SettingsDialog from '@/features/settings/SettingsDialog'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
 
+const PAGE_PREFIX = import.meta.env.BASE_URL + 'page/' // '/page/' locally, '/write-my-notes/page/' on Pages
 const currentPage = () =>
-  location.pathname.startsWith('/page/') ? decodeURIComponent(location.pathname.slice('/page/'.length)) : null
+  location.pathname.startsWith(PAGE_PREFIX) ? decodeURIComponent(location.pathname.slice(PAGE_PREFIX.length)) : null
 
 const SIDEBAR_KEY = 'write-my-notes:sidebar'
 
@@ -160,7 +161,7 @@ export default function App() {
         const parent = dir && [dir + '.md', dir + '.excalidraw'].find((p) => exists.has(p))
         if (parent) go(parent)
         else {
-          history.pushState(null, '', '/')
+          history.pushState(null, '', import.meta.env.BASE_URL)
           setPage(null)
         }
       }
