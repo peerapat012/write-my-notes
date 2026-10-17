@@ -37,3 +37,11 @@ export function cardText(path: string, markdown?: string, n = 3) {
     .slice(0, n)
   return [`${parseIcon(path, markdown) ?? '📄'} ${title}`, ...lines].join('\n')
 }
+
+type El = { id: string; isDeleted?: boolean; containerId?: string | null }
+
+/** Live elements to export: the selection (with text bound to selected shapes), or the whole board when nothing is selected. */
+export function exportElements<T extends El>(elements: readonly T[], selected: Record<string, unknown>) {
+  const live = elements.filter((el) => !el.isDeleted)
+  return Object.keys(selected).length ? live.filter((el) => selected[el.id] || (el.containerId && selected[el.containerId])) : live
+}

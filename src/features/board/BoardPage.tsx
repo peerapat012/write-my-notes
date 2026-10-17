@@ -2,6 +2,8 @@ import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
   Excalidraw,
+  exportToBlob,
+  exportToSvg,
   FONT_FAMILY,
   getSceneVersion,
   newElementWith,
@@ -41,7 +43,8 @@ import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
 import { createContent, type Mode } from '@/ai/create'
 import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
 import AiPanel from './AiPanel'
-import { cardText, toDisk } from './board'
+import { cardText, exportElements, toDisk } from './board'
+import Menu from '@/components/Menu'
 import { readBoard, readText } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
 import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
@@ -175,6 +178,7 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [exportAt, setExportAt] = useState<DOMRect>()
   const [ready, setReady] = useState(false) // first scene rendered; shows the loading state until then
   const [initialData] = useState(async (): Promise<ExcalidrawInitialDataState> => {
     const data = await board.load()
@@ -238,6 +242,21 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
     const texts = boardTexts(board.api()!.getSceneElements())
     if (!texts.length) throw new Error('Nothing to summarize: the board has no text.')
     await onSummary(summaryDoc(path.slice(path.lastIndexOf('/') + 1), await summarize(model, texts)))
+  }
+
+  /** Downloads the selection (or the whole board) as PNG or SVG on a white background, light theme. */
+  async function exportAs(type: 'png' | 'svg') {
+    const a = board.api()!
+    const state = a.getAppState()
+    const opts = {
+      elements: exportElements(a.getSceneElements(), state.selectedElementIds),
+      appState: { ...state, exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
+      files: a.getFiles(),
+    }
+    const blob = type === 'png' ? await exportToBlob({ ...opts, mimeType: 'image/png' }) : new Blob([(await exportToSvg(opts)).outerHTML], { type: 'image/svg+xml' })
+    const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${title}.${type}` })
+    link.click()
+    URL.revokeObjectURL(link.href)
   }
 
   const center = () => {
@@ -376,7 +395,7 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
             <Sparkles size={16} /> AI
           </span>
         </button>
-        <button className={textBtn} disabled title="Export (coming soon)">
+        <button className={textBtn} title="Export" aria-haspopup="menu" onClick={(e) => setExportAt(e.currentTarget.getBoundingClientRect())}>
           <span className="flex items-center gap-1.5">
             <Download size={16} /> Export
           </span>
@@ -480,6 +499,22 @@ function Board({ root, path, dark, model, onSummary, go, onRename, reload }: Pro
           </div>
         )}
       </div>
+      {exportAt && (
+        <Menu
+          label="Export"
+          anchor={exportAt}
+          onClose={() => setExportAt(undefined)}
+          groups={[
+            {
+              label: ui.selected ? `Export ${ui.selected} selected` : 'Export whole board',
+              items: [
+                { label: 'PNG', icon: Image, onSelect: () => exportAs('png') },
+                { label: 'SVG', icon: Download, onSelect: () => exportAs('svg') },
+              ],
+            },
+          ]}
+        />
+      )}
       {conflict && (
         <ConflictDialog
           name={title}

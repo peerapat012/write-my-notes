@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { cardText, swapURLs, toDisk } from './board'
+import { cardText, exportElements, swapURLs, toDisk } from './board'
 
 const scene = JSON.stringify({ type: 'excalidraw', version: 2, elements: [{ id: 'a' }] }, null, 2)
 
@@ -30,4 +30,10 @@ test('doc card text: title, first lines without markdown', () => {
   expect(cardText('Notes/My Doc.md', md)).toBe('🐳 My Doc\nPlan\nShip it see docs\nconst x = 1')
   expect(cardText('A.md', '')).toBe('📄 A')
   expect(cardText('Gone.md')).toBe('⚠️ Gone\nBroken link: doc not found')
+})
+
+test('exportElements: selection with bound text, else every live element', () => {
+  const els = [{ id: 'a' }, { id: 'at', containerId: 'a' }, { id: 'b' }, { id: 'c', isDeleted: true }]
+  expect(exportElements(els, { a: true }).map((e) => e.id)).toEqual(['a', 'at'])
+  expect(exportElements(els, {}).map((e) => e.id)).toEqual(['a', 'at', 'b'])
 })
