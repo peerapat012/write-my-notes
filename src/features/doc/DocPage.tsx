@@ -2,7 +2,8 @@ import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import { exportToSvg } from '@excalidraw/excalidraw'
-import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import { commandsCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
 import { CalendarClock, Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
@@ -12,6 +13,7 @@ import Menu, { type MenuGroup } from '@/components/Menu'
 import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
+import { mermaidPreview } from './mermaid'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
@@ -40,6 +42,9 @@ async function boardPreview(vault: Vault, path: string, previews: Map<string, st
   }
 }
 
+/** Slash menu icon (lucide "workflow"); Crepe wants SVG markup, not a component. */
+const MERMAID_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>'
+
 const TURN_INTO: [BlockKind, string, MenuGroup['items'][number]['icon']][] = [
   ['text', 'Text', Pilcrow],
   ['h1', 'Heading 1', Heading1],
@@ -54,6 +59,7 @@ const TURN_INTO: [BlockKind, string, MenuGroup['items'][number]['icon']][] = [
 
 type Props = {
   vault: Vault
+  dark: boolean // diagram theme; a change rebuilds the editor to re-render them
   path: string
   exists: Set<string> // every path in the notes folder, for broken-link marks
   go: (path: string) => void
@@ -62,7 +68,7 @@ type Props = {
   onSave: (text: string) => void // keeps the search index current
 }
 
-export default function DocPage({ vault, path, exists, go, onRename, onIconChange, onSave }: Props) {
+export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
@@ -124,7 +130,19 @@ export default function DocPage({ vault, path, exists, go, onRename, onIconChang
         defaultValue: body,
         featureConfigs: {
           // Token classes (tok-keyword, ...) coloured from theme variables in index.css, so code follows the theme.
-          [CrepeFeature.CodeMirror]: { theme: syntaxHighlighting(classHighlighter) },
+          [CrepeFeature.CodeMirror]: { theme: syntaxHighlighting(classHighlighter), renderPreview: mermaidPreview(dark) },
+          [CrepeFeature.BlockEdit]: {
+            buildMenu: (b) =>
+              b.getGroup('advanced').addItem('mermaid', {
+                label: 'Mermaid',
+                icon: MERMAID_ICON,
+                onRun: (ctx) => {
+                  const commands = ctx.get(commandsCtx)
+                  commands.call(clearTextInCurrentBlockCommand.key)
+                  commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'mermaid' } })
+                },
+              }),
+          },
           [CrepeFeature.Placeholder]: { text: 'Write, or type / for commands' },
           [CrepeFeature.ImageBlock]: {
             onUpload: async (image) => relativePath(path, await vault.saveAsset(image)),
@@ -180,7 +198,7 @@ export default function DocPage({ vault, path, exists, go, onRename, onIconChang
       editor.current = undefined
       crepe?.destroy()
     }
-  }, [vault, path, rev])
+  }, [vault, path, rev, dark])
 
   // Find links whose target is missing as the editor re-renders and as the folder changes. Styled from a
   // <style> rule, not by touching the editor DOM: ProseMirror would treat attribute changes as edits.

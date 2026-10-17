@@ -78,7 +78,7 @@ Everything in [SPEC.md](SPEC.md) (v1) still holds unless this file says otherwis
 
 ## Mermaid (docs)
 
-- A fenced code block with language `mermaid` renders as a diagram when the block is not focused. Clicking it shows the code for editing.
+- A fenced code block with language `mermaid` renders as a diagram under its code (Crepe `renderPreview`), updating as you type. The block's "Hide" button collapses the code. (Changed from "diagram only when not focused": Crepe cannot set preview-only for loaded blocks but not for new ones, and hiding the code while typing is worse.)
 - The `.md` file keeps a plain fenced block. Nothing else is stored.
 - `mermaid` is lazy-loaded the first time a doc has a mermaid block.
 - The diagram theme follows the app's light/dark theme.

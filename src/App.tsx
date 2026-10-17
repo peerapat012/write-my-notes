@@ -245,6 +245,7 @@ export default function App() {
           <DocPage
             key={page + rev}
             vault={root}
+            dark={dark}
             path={page}
             exists={exists}
             go={go}

@@ -216,3 +216,11 @@ main .milkdown .milkdown-code-block {
 .board .excalidraw .LoadingMessage {
   display: none;
 }
+
+/* Mermaid syntax error shown in place of a diagram. */
+main .milkdown .mermaid-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+}
