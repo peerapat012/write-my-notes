@@ -1,4 +1,9 @@
+import { FileText, FolderOpen, PanelLeftOpen, Presentation, Search } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import Dialog from '@/components/Dialog'
+import EmptyState from '@/components/EmptyState'
+import { INVALID } from '@/components/NameInput'
+import { ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
 import { createPage, flushes, listEntries, loadRoot, movePage, saveRoot } from '@/lib/fs'
@@ -13,6 +18,8 @@ import { buildTree, type Entry } from '@/features/sidebar/tree'
 
 const currentPage = () =>
   location.pathname.startsWith('/page/') ? decodeURIComponent(location.pathname.slice('/page/'.length)) : null
+
+const SIDEBAR_KEY = 'write-my-notes:sidebar'
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
 const subscribeDark = (cb: () => void) => {
@@ -35,6 +42,10 @@ export default function App() {
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
   const [settings, setSettings] = useState(() => loadSettings())
   const [showSettings, setShowSettings] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [naming, setNaming] = useState<{ dir: string; type: 'doc' | 'board' }>() // new-page name dialog
+  const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
+  const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
   const systemDark = useSyncExternalStore(subscribeDark, () => darkQuery.matches)
   const dark = settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
   useLayoutEffect(() => void document.documentElement.classList.toggle('dark', dark), [dark]) // before paint: no light flash
@@ -44,21 +55,52 @@ export default function App() {
     saveSettings(next)
   }
 
+  function toggleSidebar() {
+    setSidebar((shown) => {
+      localStorage.setItem(SIDEBAR_KEY, shown ? 'hidden' : 'shown')
+      return !shown
+    })
+  }
+
   async function open(dir: FileSystemDirectoryHandle) {
     setRoot(dir)
     setEntries(await listEntries(dir))
+    setLoading(false)
+  }
+
+  /** Opens a folder the user just picked or re-granted: the tree shows its loading state until scanned. */
+  function openFresh(dir: FileSystemDirectoryHandle) {
+    setEntries([])
+    setLoading(true)
+    return open(dir)
   }
 
   useEffect(() => {
     loadRoot().then(async (dir) => {
-      if (!dir) return
-      if ((await dir.queryPermission({ mode: 'readwrite' })) === 'granted') open(dir)
-      else setStored(dir) // requestPermission needs a user gesture: show a reopen button
+      if (dir && (await dir.queryPermission({ mode: 'readwrite' })) === 'granted') return open(dir)
+      if (dir) setStored(dir) // requestPermission needs a user gesture: show a reopen button
+      setLoading(false)
     })
     const onPop = () => setPage(currentPage())
     addEventListener('popstate', onPop)
     return () => removeEventListener('popstate', onPop)
   }, [])
+
+  // Ctrl+K opens the palette, Ctrl+\ hides or shows the sidebar. Capture phase: beat the browser's search
+  // bar and editor shortcuts.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      // Physical keys (`code`), so the shortcuts also work with a non-Latin layout such as Thai.
+      if (e.code === 'KeyK' && root) setShowSearch(true)
+      else if (e.code === 'Backslash') toggleSidebar()
+      else return
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [root])
 
   // Rescan on focus to catch pages added or removed on disk (e.g. by `git pull`).
   useEffect(() => {
@@ -75,14 +117,14 @@ export default function App() {
     try {
       const dir = await showDirectoryPicker({ mode: 'readwrite' })
       await saveRoot(dir)
-      await open(dir)
+      await openFresh(dir)
     } catch (e) {
       if ((e as Error).name !== 'AbortError') alert(`Could not open folder: ${e}`)
     }
   }
 
   async function reopen() {
-    if (stored && (await stored.requestPermission({ mode: 'readwrite' })) === 'granted') open(stored)
+    if (stored && (await stored.requestPermission({ mode: 'readwrite' })) === 'granted') openFresh(stored)
   }
 
   function go(path: string) {
@@ -108,28 +150,58 @@ export default function App() {
 
   const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
 
-  async function create(dir: string, type: 'doc' | 'board') {
-    const name = prompt(`New ${type} name`)?.trim()
+  // Asks for the name in a dialog (below), then creates the page and opens it.
+  const create = (dir: string, type: 'doc' | 'board') => setNaming({ dir, type })
+
+  async function createNamed(dir: string, type: 'doc' | 'board', name: string) {
+    setNaming(undefined)
     if (!root || !name) return
     const path = await createPage(root, dir, name, type)
     await open(root)
     go(path)
   }
 
+  const newPage = (
+    <>
+      <button className={secondaryButton} onClick={() => create('', 'doc')}>
+        <FileText size={16} /> New doc
+      </button>
+      <button className={secondaryButton} onClick={() => create('', 'board')}>
+        <Presentation size={16} /> New board
+      </button>
+    </>
+  )
+
   return (
     <div className="flex h-screen text-sm">
-      <Sidebar
-        root={root}
-        stored={stored}
-        tree={tree}
-        page={page}
-        go={go}
-        create={create}
-        move={move}
-        reopen={reopen}
-        pickFolder={pickFolder}
-        openSettings={() => setShowSettings(true)}
-      />
+      {sidebar ? (
+        <Sidebar
+          root={root}
+          stored={stored}
+          loading={loading}
+          tree={tree}
+          page={page}
+          go={go}
+          create={create}
+          move={move}
+          reopen={reopen}
+          pickFolder={pickFolder}
+          openSettings={() => setShowSettings(true)}
+          openSearch={() => setShowSearch(true)}
+          hide={toggleSidebar}
+        />
+      ) : (
+        <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
+          <button className={iconButton} title="Show sidebar (Ctrl+\)" aria-label="Show sidebar" onClick={toggleSidebar}>
+            <PanelLeftOpen size={16} />
+          </button>
+          {root && (
+            <button className={iconButton} title="Search (Ctrl+K)" aria-label="Search" onClick={() => setShowSearch(true)}>
+              <Search size={16} />
+            </button>
+          )}
+        </div>
+      )}
       <main className="min-w-0 flex-1 overflow-auto">
         {root && page?.endsWith('.md') ? (
           <DocPage
@@ -144,11 +216,68 @@ export default function App() {
           />
         ) : root && page?.endsWith('.excalidraw') ? (
           <BoardPage key={page + rev} root={root} path={page} dark={dark} go={go} onRename={(name) => rename(page, name)} />
+        ) : loading ? null : root ? (
+          <EmptyState icon={FileText} title="No page open" actions={newPage}>
+            Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
+          </EmptyState>
         ) : (
-          <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
+          <EmptyState
+            icon={FolderOpen}
+            title="Open your notes folder"
+            actions={
+              stored ? (
+                <>
+                  <button className={primaryButton} onClick={reopen}>
+                    Reopen “{stored.name}”
+                  </button>
+                  <button className={secondaryButton} onClick={pickFolder}>
+                    Open another folder
+                  </button>
+                </>
+              ) : (
+                <button className={primaryButton} onClick={pickFolder}>
+                  <FolderOpen size={16} /> Open folder
+                </button>
+              )
+            }
+          >
+            Notedflow keeps each page as a plain Markdown or Excalidraw file in a folder you choose, so git and your
+            other editors can read them too.
+          </EmptyState>
         )}
       </main>
-      {root && <SearchPalette index={index} go={go} />}
+      {showSearch && root && <SearchPalette index={index} go={go} onClose={() => setShowSearch(false)} />}
+      {naming && (
+        <Dialog aria-label={`New ${naming.type}`} onClose={() => setNaming(undefined)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              createNamed(naming.dir, naming.type, String(new FormData(e.currentTarget).get('name')).trim())
+            }}
+          >
+            <h2 className="font-semibold">New {naming.type}</h2>
+            <input
+              name="name"
+              autoFocus
+              required
+              aria-label="Page name"
+              placeholder={naming.type === 'doc' ? 'Meeting notes' : 'Architecture sketch'}
+              onInput={(e) => {
+                const bad = INVALID.test(e.currentTarget.value.trim())
+                e.currentTarget.setCustomValidity(bad ? 'A name can’t start with a dot or contain \\ / : * ? " < > |' : '')
+              }}
+              className={`${input} mt-3`}
+            />
+            {naming.dir && <p className="mt-1.5 truncate text-xs text-neutral-500">Inside {naming.dir}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className={ghostButton} onClick={() => setNaming(undefined)}>
+                Cancel
+              </button>
+              <button className={primaryButton}>Create</button>
+            </div>
+          </form>
+        </Dialog>
+      )}
       {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
     </div>
   )

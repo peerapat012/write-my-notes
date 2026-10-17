@@ -1,4 +1,4 @@
-const INVALID = /^\.|[\\/:*?"<>|]/ // hidden (dot) names and characters Windows can't store
+export const INVALID = /^\.|[\\/:*?"<>|]/ // hidden (dot) names and characters Windows can't store
 
 type Props = { value: string; onDone: (name: string) => void; className?: string; autoFocus?: boolean }
 

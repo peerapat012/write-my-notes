@@ -1,62 +1,218 @@
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Warm grays (Notion-like) and one muted blue accent. Roles: white = page and panels, 50 = sidebar and code
+   surfaces, 100 = hover, 200 = borders and selected rows, 300 = input borders, 400 = icons and disabled
+   (3:1), 500 = muted text, shortcuts and placeholders (4.5:1), 700 = secondary text, 900 = body text.
+   Accent: focus rings, text selection, the active page, primary buttons. Nothing else. */
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, Consolas, monospace;
+  --color-neutral-50: #f8f7f5;
+  --color-neutral-100: #efeeeb;
+  --color-neutral-200: #e5e3df;
+  --color-neutral-300: #d6d4cf;
+  --color-neutral-400: #8f8c85;
+  --color-neutral-500: #6b6862;
+  --color-neutral-600: #57544f;
+  --color-neutral-700: #45433e;
+  --color-neutral-800: #373631;
+  --color-neutral-900: #2f2e2a;
+  --color-accent: #2f6bad;
+  --color-accent-soft: #e3ecf7;
+  --color-on-accent: #ffffff;
+  --color-danger: #c4372f;
+  --shadow-panel: 0 1px 2px rgb(15 15 15 / 0.06), 0 4px 16px rgb(15 15 15 / 0.1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 html {
   color-scheme: light;
   background: var(--color-white);
   color: var(--color-neutral-900);
-  --grid-dot: #a3a3a3;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  --grid-dot: #c9c6c0;
+  --code-keyword: #9b2c6f;
+  --code-string: #2f6f3e;
+  --code-number: #8a4b08;
+  --code-type: #1f5f8b;
+  --code-function: #5b3fa3;
+  --code-inline: #b3403a;
 }
 
 /* Dark theme (App puts `.dark` on <html>): remap white and the neutral scale, so every neutral utility
-   flips without a `dark:` variant on each class. bg-white = page/panels, 100 = hover, 200 = borders/selected,
-   400-600 = muted text, 900 = body text and primary buttons (whose text-white turns dark). */
+   flips without a `dark:` variant on each class. */
 .dark {
   color-scheme: dark;
-  --color-white: #1a1a1a;
-  --color-neutral-100: #2a2a2a;
-  --color-neutral-200: #363636;
-  --color-neutral-300: #4a4a4a;
-  --color-neutral-400: #8a8a8a;
-  --color-neutral-500: #a3a3a3;
-  --color-neutral-600: #b8b8b8;
-  --color-neutral-700: #d4d4d4;
-  --color-neutral-900: #ececec;
-  --grid-dot: #3d3d3d;
+  --color-white: #191919;
+  --color-neutral-50: #202020;
+  --color-neutral-100: #2c2c2b;
+  --color-neutral-200: #373735;
+  --color-neutral-300: #4a4946;
+  --color-neutral-400: #6e6c68;
+  --color-neutral-500: #9c9a95;
+  --color-neutral-600: #b3b1ac;
+  --color-neutral-700: #cbc9c5;
+  --color-neutral-800: #dddcd8;
+  --color-neutral-900: #e9e8e5;
+  --color-accent: #3a75bd;
+  --color-accent-soft: #1f3049;
+  --color-danger: #f0857a;
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.45);
+  --grid-dot: #3a3937;
+  --code-keyword: #e48bc0;
+  --code-string: #8cc79a;
+  --code-number: #e0a96d;
+  --code-type: #79b8e6;
+  --code-function: #b9a3f0;
+  --code-inline: #f08a7e;
 }
 
-/* Crepe's frame-dark.css colours; it shares frame.css's selector, so it can't be imported alongside. */
-.dark .milkdown {
-  --crepe-color-background: #1a1a1a;
-  --crepe-color-on-background: #e6e6e6;
-  --crepe-color-surface: #121212;
-  --crepe-color-surface-low: #1c1c1c;
-  --crepe-color-on-surface: #d1d1d1;
-  --crepe-color-on-surface-variant: #a9a9a9;
-  --crepe-color-outline: #757575;
-  --crepe-color-primary: #b5b5b5;
-  --crepe-color-secondary: #4d4d4d;
-  --crepe-color-on-secondary: #d6d6d6;
-  --crepe-color-inverse: #e5e5e5;
-  --crepe-color-on-inverse: #2a2a2a;
-  --crepe-color-inline-code: #ff6666;
-  --crepe-color-error: #ff6666;
-  --crepe-color-hover: #232323;
-  --crepe-color-selected: #2f2f2f;
-  --crepe-color-inline-area: #2b2b2b;
-  --crepe-shadow-1: 0px 1px 2px 0px rgba(255, 255, 255, 0.3), 0px 1px 3px 1px rgba(255, 255, 255, 0.15);
-  --crepe-shadow-2: 0px 1px 2px 0px rgba(255, 255, 255, 0.3), 0px 2px 6px 2px rgba(255, 255, 255, 0.15);
+/* Browser surfaces in the base layer, so utilities (e.g. a row's own focus style) can override them. */
+@layer base {
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-neutral-300) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after,
+    ::backdrop {
+      transition-duration: 0s !important;
+      animation-duration: 0s !important;
+    }
+  }
 }
 
-/* Crepe pads the editor 60px 120px; align it with the page title instead. */
+/* Crepe: map its colours onto our tokens (so both themes follow them) and swap its serif headings for Geist.
+   `:root .milkdown` outranks frame.css's `.milkdown`. */
+:root .milkdown {
+  --crepe-color-background: var(--color-white);
+  --crepe-color-on-background: var(--color-neutral-900);
+  --crepe-color-surface: var(--color-neutral-50);
+  --crepe-color-surface-low: var(--color-neutral-100);
+  --crepe-color-on-surface: var(--color-neutral-800);
+  --crepe-color-on-surface-variant: var(--color-neutral-500);
+  --crepe-color-outline: var(--color-neutral-500);
+  --crepe-color-primary: var(--color-neutral-700);
+  --crepe-color-secondary: var(--color-neutral-200);
+  --crepe-color-on-secondary: var(--color-neutral-900);
+  --crepe-color-inverse: var(--color-neutral-900);
+  --crepe-color-on-inverse: var(--color-white);
+  --crepe-color-inline-code: var(--code-inline);
+  --crepe-color-error: var(--code-inline);
+  --crepe-color-hover: var(--color-neutral-100);
+  --crepe-color-selected: var(--color-neutral-200);
+  --crepe-color-inline-area: var(--color-neutral-100);
+  --crepe-font-title: var(--font-sans);
+  --crepe-font-default: var(--font-sans);
+  --crepe-font-code: var(--font-mono);
+  --crepe-shadow-1: var(--shadow-panel);
+  --crepe-shadow-2: var(--shadow-panel);
+}
+
+/* Doc type scale. Content headings stay well below the 40px page title, so the two never read alike. */
 main .milkdown .ProseMirror {
   padding: 0;
+  line-height: 1.65;
+
+  p {
+    line-height: 1.65;
+    padding: 3px 0;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    padding: 0;
+    margin-bottom: 4px;
+  }
+  h1 { font-size: 1.75em; line-height: 1.25; margin-top: 1.6em; }
+  h2 { font-size: 1.375em; line-height: 1.3; margin-top: 1.4em; }
+  h3 { font-size: 1.125em; line-height: 1.4; margin-top: 1.2em; }
+  h4, h5, h6 { font-size: 1em; line-height: 1.5; margin-top: 1em; }
+  a {
+    color: inherit;
+    text-decoration-color: var(--color-neutral-400);
+    text-underline-offset: 3px;
+  }
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+  code {
+    padding: 0 4px;
+  }
+  *::selection {
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  }
 }
 
-/* Board: our own toolbars replace Excalidraw's chrome (desktop layout, then the narrow-window layout). */
+main .milkdown input::placeholder {
+  color: var(--color-neutral-500);
+}
+
+/* Crepe's slash menu, selection toolbar and language list: the same solid panel as our own menus. */
+main .milkdown :is(.milkdown-slash-menu, .milkdown-toolbar, .list-wrapper) {
+  background: var(--color-white);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 8px;
+  box-shadow: var(--shadow-panel);
+}
+
+/* Code blocks: a calm surface in both themes; token colours come from CodeMirror's classHighlighter. */
+main .milkdown .milkdown-code-block {
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 8px;
+  padding: 6px 12px 12px;
+  margin: 8px 0;
+
+  .cm-editor { font-size: 13.5px; }
+  /* Language label always shown (quietly), so a reader knows what the code is; copy stays on hover. */
+  .tools .language-button {
+    opacity: 1;
+    background: transparent;
+    padding-left: 4px;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+  .tools .language-button:hover { background: var(--color-neutral-100); }
+  .cm-content, .cm-gutters { font-family: var(--font-mono); }
+  .cm-gutters { color: var(--color-neutral-500); }
+  .cm-activeLine, .cm-activeLineGutter { background: transparent; }
+  .cm-cursor { border-left-color: var(--color-neutral-900); }
+  .cm-selectionBackground, &.cm-focused .cm-selectionBackground, .cm-content ::selection {
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent) !important;
+  }
+  .tok-keyword, .tok-operatorKeyword, .tok-modifier { color: var(--code-keyword); }
+  .tok-string, .tok-string2, .tok-regexp { color: var(--code-string); }
+  .tok-number, .tok-bool, .tok-atom { color: var(--code-number); }
+  .tok-typeName, .tok-className, .tok-namespace { color: var(--code-type); }
+  .tok-function, .tok-variableName.tok-definition, .tok-propertyName.tok-definition { color: var(--code-function); }
+  .tok-comment { color: var(--color-neutral-500); font-style: italic; }
+  .tok-meta, .tok-punctuation { color: var(--color-neutral-600); }
+  .tok-heading { font-weight: 600; }
+  .tok-link { text-decoration: underline; }
+}
+
+/* Board: our own toolbars replace Excalidraw's chrome (desktop layout, then the narrow-window layout),
+   and our loading overlay replaces its "Loading scene..." message. */
 .board .excalidraw .layer-ui__wrapper,
 .board .excalidraw .App-top-bar,
-.board .excalidraw .App-bottom-bar {
+.board .excalidraw .App-bottom-bar,
+.board .excalidraw .LoadingMessage {
   display: none;
 }

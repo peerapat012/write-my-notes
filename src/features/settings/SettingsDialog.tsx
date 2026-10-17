@@ -1,4 +1,6 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
+import Dialog from '@/components/Dialog'
+import { input, primaryButton } from '@/components/ui'
 import { DEFAULT_MODEL, type Settings, type Theme } from './settings'
 
 const THEMES = [
@@ -12,21 +14,15 @@ type Props = { settings: Settings; onChange: (settings: Settings) => void; onClo
 /** Theme and Gemini model name. Every change applies and saves immediately. */
 export default function SettingsDialog({ settings, onChange, onClose }: Props) {
   return (
-    <dialog
-      ref={(d) => void (d && !d.open && d.showModal())}
-      aria-label="Settings"
-      onClose={onClose}
-      onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
-      className="m-auto w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-5 text-sm text-neutral-900 shadow-xl backdrop:bg-black/40"
-    >
+    <Dialog aria-label="Settings" onClose={onClose}>
       <h2 className="font-semibold">Settings</h2>
       <fieldset className="mt-4">
-        <legend className="mb-1.5 text-neutral-600">Theme</legend>
+        <legend className="mb-1.5 text-neutral-500">Theme</legend>
         <div className="grid grid-cols-3 gap-1 rounded-md bg-neutral-100 p-1">
           {THEMES.map(([value, Icon, label]) => (
             <label
               key={value}
-              className="flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-1.5 has-checked:bg-white has-checked:shadow-sm has-focus-visible:outline-2"
+              className="flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded text-neutral-500 transition-colors duration-150 hover:text-neutral-900 has-checked:bg-white has-checked:text-neutral-900 has-checked:shadow-sm has-focus-visible:outline-2 has-focus-visible:outline-accent"
             >
               <input
                 type="radio"
@@ -41,20 +37,20 @@ export default function SettingsDialog({ settings, onChange, onClose }: Props) {
         </div>
       </fieldset>
       <label className="mt-4 block">
-        <span className="mb-1.5 block text-neutral-600">Gemini model</span>
+        <span className="mb-1.5 block text-neutral-500">Gemini model</span>
         <input
-          className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1.5"
+          className={input}
           value={settings.model}
-          placeholder={DEFAULT_MODEL}
+          placeholder={`${DEFAULT_MODEL} (default)`}
           spellCheck={false}
           onChange={(e) => onChange({ ...settings, model: e.target.value })}
         />
       </label>
       <div className="mt-5 flex justify-end">
-        <button autoFocus className="rounded bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700" onClick={onClose}>
+        <button autoFocus className={primaryButton} onClick={onClose}>
           Done
         </button>
       </div>
-    </dialog>
+    </Dialog>
   )
 }

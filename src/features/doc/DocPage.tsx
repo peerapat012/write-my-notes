@@ -3,6 +3,8 @@ import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import { exportToSvg } from '@excalidraw/excalidraw'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import { syntaxHighlighting } from '@codemirror/language'
+import { classHighlighter } from '@lezer/highlight'
 import { SmilePlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
@@ -10,6 +12,7 @@ import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib
 import { setIcon, splitFrontMatter } from './frontmatter'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
+import { skeleton } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 import { readBoard } from '@/features/board/readBoard'
 import { parseIcon } from '@/features/sidebar/tree'
@@ -48,6 +51,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(icon?: string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
+  const [ready, setReady] = useState(false) // editor created; shows the loading state until then
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
   const [broken, setBroken] = useState('') // CSS selector list of links whose target is missing
@@ -95,6 +99,9 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
         root: mount.current,
         defaultValue: body,
         featureConfigs: {
+          // Token classes (tok-keyword, ...) coloured from theme variables in index.css, so code follows the theme.
+          [CrepeFeature.CodeMirror]: { theme: syntaxHighlighting(classHighlighter) },
+          [CrepeFeature.Placeholder]: { text: 'Write, or type / for commands' },
           [CrepeFeature.ImageBlock]: {
             onUpload: async (image) => relativePath(path, await saveAsset(root, image)),
             // ponytail: blob URLs are never revoked; fine per page view, revoke on unmount if memory grows.
@@ -117,6 +124,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
         }),
       )
       await crepe.create()
+      if (!cancelled) setReady(true)
       file = handle
 
       save.current = (newIcon) => {
@@ -186,22 +194,33 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
 
   const title = path.slice(path.lastIndexOf('/') + 1, -'.md'.length)
   return (
-    <div className="mx-auto max-w-3xl px-16 py-10">
-      <div className="relative mb-2 w-14">
+    <div className="mx-auto max-w-3xl px-16 pt-16 pb-32">
+      <div className="group relative mb-3 size-14">
         <input
           aria-label="Page icon (Win + . for emoji)"
           title="Type or paste an emoji (Win + .)"
-          className="w-full rounded bg-transparent text-4xl hover:bg-neutral-100"
+          className="size-full rounded-md bg-transparent text-center text-[40px] leading-none transition-colors duration-150 hover:bg-neutral-100"
           value={icon ?? ''}
           onChange={(e) => changeIcon(e.target.value)}
         />
-        {!icon && <SmilePlus className="pointer-events-none absolute inset-0 m-auto text-neutral-400" size={28} />}
+        {!icon && <SmilePlus className="pointer-events-none absolute inset-0 m-auto text-neutral-400" size={28} strokeWidth={1.5} />}
       </div>
-      <h1 className="mb-4 text-4xl font-bold">
-        <NameInput value={title} onDone={(name) => name !== title && onRename(name)} className="w-full rounded bg-transparent outline-none" />
+      <h1 className="mb-6 text-[40px] leading-tight font-bold tracking-[-0.02em]">
+        <NameInput
+          value={title}
+          onDone={(name) => name !== title && onRename(name)}
+          className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-400"
+        />
       </h1>
+      {!ready && (
+        <div aria-label="Loading page" className="space-y-3 pt-1">
+          {[92, 100, 84, 0, 96, 70].map((w, i) =>
+            w ? <div key={i} className={`${skeleton} h-4`} style={{ width: `${w}%` }} /> : <div key={i} className="h-3" />,
+          )}
+        </div>
+      )}
       <div ref={mount} onClick={openLink} />
-      {broken && <style>{`${broken} { color: var(--color-red-600); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
+      {broken && <style>{`${broken} { color: var(--color-danger); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
       {conflict && (
         <ConflictDialog
           name={title}

@@ -42,6 +42,7 @@ import { readBoard, readText } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
 import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
 import NameInput from '@/components/NameInput'
+import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 
 type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; go: (path: string) => void; onRename: (name: string) => void }
@@ -169,6 +170,7 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
   const [icon, setIcon] = useState<string>()
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: false })
   const [emojis, setEmojis] = useState(false)
+  const [ready, setReady] = useState(false) // first scene rendered; shows the loading state until then
   const [initialData] = useState(async (): Promise<ExcalidrawInitialDataState> => {
     const data = await board.load()
     setIcon(data.icon)
@@ -197,6 +199,7 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
     style.backgroundPosition = `${app.scrollX * z}px ${app.scrollY * z}px`
     const next = { tool: app.activeTool.customType ?? app.activeTool.type, zoom: Math.round(z * 100), selected: Object.keys(app.selectedElementIds).length > 0 }
     setUi((u) => (u.tool === next.tool && u.zoom === next.zoom && u.selected === next.selected ? u : next))
+    setReady(true)
 
     board.changed(elements)
   }
@@ -299,41 +302,47 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
     a.updateScene({ elements, appState: current as AppState, captureUpdate: CaptureUpdateAction.IMMEDIATELY })
   }
 
-  const btn = 'grid h-8 min-w-8 place-items-center rounded px-2 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent'
+  const btn =
+    'grid h-7 min-w-7 place-items-center rounded-md px-1.5 text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 disabled:pointer-events-none disabled:opacity-40'
+  const textBtn = `${btn} text-[13px] font-medium text-neutral-700`
   const title = path.slice(path.lastIndexOf('/') + 1, -'.excalidraw'.length)
   return (
     <div className="board flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 border-b border-neutral-200 px-2">
         <button className={btn} title="Back" aria-label="Back" onClick={() => history.back()}>
-          <ArrowLeft size={18} />
+          <ArrowLeft size={16} />
         </button>
-        <h1 className="mr-auto flex items-center gap-1.5 truncate px-2 font-medium">
-          {icon ?? <Presentation size={18} />}
-          <NameInput value={title} onDone={(name) => name !== title && onRename(name)} className="min-w-0 rounded bg-transparent px-1 hover:bg-neutral-100" />
+        <h1 className="mr-auto flex min-w-0 items-center gap-1 px-1 font-medium">
+          <span className="grid size-6 shrink-0 place-items-center text-base leading-none text-neutral-500">{icon ?? <Presentation size={16} />}</span>
+          <NameInput
+            value={title}
+            onDone={(name) => name !== title && onRename(name)}
+            className="h-7 min-w-0 rounded-md bg-transparent px-1.5 transition-colors duration-150 hover:bg-neutral-100"
+          />
         </h1>
         <button className={btn} title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => keys('KeyZ', 'z')}>
-          <Undo2 size={18} />
+          <Undo2 size={16} />
         </button>
         <button className={btn} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => keys('KeyZ', 'Z', true)}>
-          <Redo2 size={18} />
+          <Redo2 size={16} />
         </button>
-        <span className="mx-2 h-5 border-l border-neutral-200" />
+        <span className="mx-1.5 h-5 border-l border-neutral-200" />
         <button className={btn} title="Zoom out" aria-label="Zoom out" onClick={() => keys('Minus', '-')}>
-          <Minus size={18} />
+          <Minus size={16} />
         </button>
         <button className={`${btn} w-14 tabular-nums`} title="Reset zoom" onClick={() => keys('Digit0', '0')}>
           {ui.zoom}%
         </button>
         <button className={btn} title="Zoom in" aria-label="Zoom in" onClick={() => keys('Equal', '=')}>
-          <Plus size={18} />
+          <Plus size={16} />
         </button>
-        <span className="mx-2 h-5 border-l border-neutral-200" />
-        <button className={btn} disabled title="AI (coming soon)">
+        <span className="mx-1.5 h-5 border-l border-neutral-200" />
+        <button className={textBtn} disabled title="AI (coming soon)">
           <span className="flex items-center gap-1.5">
             <Sparkles size={16} /> AI
           </span>
         </button>
-        <button className={btn} disabled title="Export (coming soon)">
+        <button className={textBtn} disabled title="Export (coming soon)">
           <span className="flex items-center gap-1.5">
             <Download size={16} /> Export
           </span>
@@ -347,6 +356,13 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
         onDoubleClickCapture={openCard}
         style={{ backgroundImage: 'radial-gradient(var(--grid-dot) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
       >
+        {!ready && (
+          <div className="absolute inset-0 z-20 grid place-items-center bg-white">
+            <div className="flex animate-pulse items-center gap-2 text-neutral-500">
+              <Presentation size={16} /> Opening board…
+            </div>
+          </div>
+        )}
         <Excalidraw
           excalidrawAPI={board.setApi}
           initialData={initialData}
@@ -357,21 +373,26 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
             canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false },
           }}
         />
-        <nav className="absolute top-1/2 left-3 z-10 flex -translate-y-1/2 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
+        <nav aria-label="Tools" className={`${panel} absolute top-1/2 left-3 z-10 flex -translate-y-1/2 flex-col gap-0.5 p-1`}>
           {TOOLS.map(([type, Icon, label]) => (
             <button
               key={type}
               title={label}
               aria-label={label}
               aria-pressed={ui.tool === type}
-              className={`${btn} ${ui.tool === type ? 'bg-neutral-200 hover:bg-neutral-200' : ''}`}
+              className={`${btn} ${ui.tool === type ? 'bg-neutral-200 text-neutral-900 hover:bg-neutral-200' : ''}`}
               onClick={() => board.api()?.setActiveTool(type === 'sticky' ? { type: 'custom', customType: type } : ({ type } as never))}
             >
-              <Icon size={18} />
+              <Icon size={16} />
             </button>
           ))}
-          <button title="Emoji" aria-label="Emoji" aria-expanded={emojis} className={btn} onClick={() => setEmojis((o) => !o)}>
-            <Smile size={18} />
+          <button
+            title="Emoji"
+            aria-label="Emoji"
+            aria-expanded={emojis}
+            className={`${btn} ${emojis ? 'bg-neutral-200 text-neutral-900' : ''}`}
+            onClick={() => setEmojis((o) => !o)}>
+            <Smile size={16} />
           </button>
           <button
             title="Image (or paste)"
@@ -379,26 +400,30 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
             className={btn}
             onClick={() => board.api()?.setActiveTool({ type: 'image', insertOnCanvasDirectly: true })}
           >
-            <Image size={18} />
+            <Image size={16} />
           </button>
         </nav>
         {emojis && (
-          <div className="absolute top-1/2 left-16 z-10 grid w-56 -translate-y-1/2 grid-cols-6 gap-1 rounded-lg border border-neutral-200 bg-white p-1 text-xl shadow-sm">
+          <div
+            className={`${panel} absolute top-1/2 left-17 z-10 grid -translate-y-1/2 grid-cols-6 gap-0.5 p-1.5 text-xl transition-[opacity,translate] duration-150 ease-out starting:-translate-x-1 starting:opacity-0`}
+          >
             {EMOJIS.map((e) => (
-              <button key={e} className="grid size-8 place-items-center rounded hover:bg-neutral-100" aria-label={e} onClick={() => placeEmoji(e)}>
+              <button key={e} className="grid size-9 place-items-center rounded-md transition-colors duration-150 hover:bg-neutral-100" aria-label={e} onClick={() => placeEmoji(e)}>
                 {e}
               </button>
             ))}
           </div>
         )}
         {ui.selected && (
-          <div className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
+          <div
+            className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
+          >
             {FILLS.map((c) => (
               <button
                 key={c}
                 title={c === 'transparent' ? 'No fill' : c}
                 aria-label={`Fill ${c}`}
-                className="m-1 size-5 rounded-full border border-neutral-300"
+                className="m-1 size-5 rounded-full border border-neutral-300 transition-transform duration-150 hover:scale-110"
                 style={{ background: c === 'transparent' ? 'linear-gradient(135deg, #fff 45%, #f87171 45% 55%, #fff 55%)' : c }}
                 onClick={() =>
                   styleSelection({ backgroundColor: c, fillStyle: 'solid' }, { currentItemBackgroundColor: c, currentItemFillStyle: 'solid' })
@@ -407,13 +432,13 @@ function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () 
             ))}
             <span className="mx-1 h-5 border-l border-neutral-200" />
             {FONTS.map(([family, label]) => (
-              <button key={label} className={btn} onClick={() => styleSelection({ fontFamily: family }, { currentItemFontFamily: family })}>
+              <button key={label} className={textBtn} onClick={() => styleSelection({ fontFamily: family }, { currentItemFontFamily: family })}>
                 {label}
               </button>
             ))}
             <span className="mx-1 h-5 border-l border-neutral-200" />
             {SIZES.map((size) => (
-              <button key={size} className={`${btn} tabular-nums`} onClick={() => styleSelection({ fontSize: size }, { currentItemFontSize: size })}>
+              <button key={size} className={`${textBtn} tabular-nums`} onClick={() => styleSelection({ fontSize: size }, { currentItemFontSize: size })}>
                 {size}
               </button>
             ))}

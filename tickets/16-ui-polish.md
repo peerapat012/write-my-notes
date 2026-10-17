@@ -39,6 +39,10 @@ Give the app one calm, consistent look across every surface. This ticket changes
    - No page selected: an empty state.
    - Loading: the tree, doc and board show calm loading states instead of a blank screen or "Loading scene...".
 
+6. App name and dev sheet
+   - The app is called **Notedflow**: show it as the brand in the sidebar header and in the `index.html` `<title>`. Do not rename storage keys or `write-my-notes` strings in code (IndexedDB name, `localStorage` key, Excalidraw `source`): they hold user data.
+   - A dev-only `/dev/ui` page (guarded by `import.meta.env.DEV`, no new deps, not Storybook) shows the shared components (menu, buttons, dialog, inputs, empty states) in light and dark side by side. Use it for the acceptance screenshots and contrast checks.
+
 ## Out of scope
 - New features, except moving existing actions into the `⋯` menu.
 - Drag-to-resize for the sidebar.

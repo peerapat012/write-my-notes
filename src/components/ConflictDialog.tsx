@@ -1,25 +1,26 @@
+import Dialog from './Dialog'
+import { primaryButton, secondaryButton } from './ui'
+
 /** Asks which version wins when a file with unsaved edits changed on disk. Esc keeps the user's edits. */
 export default function ConflictDialog({ name, onAnswer }: { name: string; onAnswer: (loadDisk: boolean) => void }) {
-  const btn = 'rounded px-3 py-1.5 font-medium'
   return (
-    <dialog
-      ref={(d) => void (d && !d.open && d.showModal())}
+    <Dialog
+      aria-label="File changed on disk"
       onCancel={(e) => {
         e.preventDefault()
         onAnswer(false)
       }}
-      className="m-auto max-w-sm rounded-lg border border-neutral-200 bg-white p-5 text-neutral-900 text-sm shadow-xl backdrop:bg-black/20"
     >
       <h2 className="font-semibold">“{name}” changed on disk</h2>
-      <p className="mt-1 text-neutral-600">You have unsaved edits. Keep yours and overwrite the file, or load the version on disk?</p>
-      <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-neutral-100`} onClick={() => onAnswer(true)}>
+      <p className="mt-1.5 text-neutral-500">You have unsaved edits. Keep yours and overwrite the file, or load the version on disk?</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button className={secondaryButton} onClick={() => onAnswer(true)}>
           Load disk version
         </button>
-        <button autoFocus className={`${btn} bg-neutral-900 text-white hover:bg-neutral-700`} onClick={() => onAnswer(false)}>
+        <button autoFocus className={primaryButton} onClick={() => onAnswer(false)}>
           Keep mine
         </button>
       </div>
-    </dialog>
+    </Dialog>
   )
 }

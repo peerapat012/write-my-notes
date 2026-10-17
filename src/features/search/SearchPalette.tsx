@@ -1,30 +1,19 @@
 import { FileText, Presentation, Search } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import Dialog from '@/components/Dialog'
+import { MenuRow } from '@/components/Menu'
 import { search, type SearchIndex } from './search'
 
-/** Ctrl+K palette: type to search page titles and doc text, arrows + Enter (or click) to open. */
-export default function SearchPalette({ index, go }: { index: SearchIndex; go: (path: string) => void }) {
-  const dialog = useRef<HTMLDialogElement>(null)
+type Props = { index: SearchIndex; go: (path: string) => void; onClose: () => void }
+
+/** Ctrl+K palette, open while mounted: type to search page titles and doc text, arrows + Enter (or click) to open. */
+export default function SearchPalette({ index, go, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const hits = search(index, query)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault() // beat the browser's search bar and editor shortcuts (capture phase)
-        e.stopPropagation()
-        setQuery('')
-        setSelected(0)
-        dialog.current?.showModal()
-      }
-    }
-    addEventListener('keydown', onKey, true)
-    return () => removeEventListener('keydown', onKey, true)
-  }, [])
-
   function open(path: string) {
-    dialog.current?.close()
+    onClose()
     go(path)
   }
 
@@ -37,14 +26,9 @@ export default function SearchPalette({ index, go }: { index: SearchIndex; go: (
   }
 
   return (
-    <dialog
-      ref={dialog}
-      aria-label="Search pages"
-      className="mx-auto mt-[15vh] w-full max-w-xl rounded-lg border border-neutral-200 bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-black/20"
-      onClick={(e) => e.target === dialog.current && dialog.current.close()}
-    >
-      <label className="flex items-center gap-2 border-b border-neutral-200 px-3">
-        <Search size={16} className="text-neutral-400" />
+    <Dialog aria-label="Search pages" onClose={onClose} padded={false} className="mx-auto mt-[15vh] w-full max-w-xl">
+      <label className="flex items-center gap-2.5 px-4">
+        <Search size={16} className="shrink-0 text-neutral-400" />
         <input
           autoFocus
           role="combobox"
@@ -52,7 +36,7 @@ export default function SearchPalette({ index, go }: { index: SearchIndex; go: (
           aria-controls="search-hits"
           aria-activedescendant={hits[selected] ? `hit-${selected}` : undefined}
           placeholder="Search pages…"
-          className="flex-1 py-3 outline-none"
+          className="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-neutral-500"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -60,28 +44,28 @@ export default function SearchPalette({ index, go }: { index: SearchIndex; go: (
           }}
           onKeyDown={onKeyDown}
         />
+        <kbd className="shrink-0 rounded border border-neutral-200 px-1.5 text-xs text-neutral-500">Esc</kbd>
       </label>
-      <ul id="search-hits" role="listbox" className="max-h-96 overflow-auto p-1">
-        {hits.map((hit, i) => (
-          <li
-            key={hit.path}
-            id={`hit-${i}`}
-            role="option"
-            aria-selected={i === selected}
-            className={`cursor-pointer rounded px-2 py-1.5 ${i === selected ? 'bg-neutral-100' : ''}`}
-            onMouseMove={() => setSelected(i)}
-            onClick={() => open(hit.path)}
-          >
-            <div className="flex items-center gap-2">
-              {hit.path.endsWith('.md') ? <FileText size={16} /> : <Presentation size={16} />}
-              <span className="truncate">{hit.title}</span>
-              <span className="ml-auto truncate text-xs text-neutral-400">{hit.path}</span>
-            </div>
-            {hit.snippet && <div className="truncate pl-6 text-xs text-neutral-500">{hit.snippet}</div>}
-          </li>
-        ))}
-        {query.trim() && !hits.length && <li className="px-2 py-1.5 text-neutral-500">No pages found</li>}
-      </ul>
-    </dialog>
+      {query.trim() && (
+        <div id="search-hits" role="listbox" className="max-h-96 overflow-auto border-t border-neutral-200 p-1">
+          {hits.map((hit, i) => (
+            <MenuRow
+              key={hit.path}
+              id={`hit-${i}`}
+              role="option"
+              aria-selected={i === selected}
+              active={i === selected}
+              icon={hit.path.endsWith('.md') ? FileText : Presentation}
+              label={hit.title}
+              hint={<span className="ml-auto max-w-[45%] shrink-0 truncate pl-3 text-xs text-neutral-500">{hit.path}</span>}
+              detail={hit.snippet}
+              onMouseMove={() => setSelected(i)}
+              onClick={() => open(hit.path)}
+            />
+          ))}
+          {!hits.length && <div className="px-2 py-1.5 text-neutral-500">No pages match “{query.trim()}”</div>}
+        </div>
+      )}
+    </Dialog>
   )
 }
