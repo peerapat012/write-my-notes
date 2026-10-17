@@ -5,11 +5,14 @@ import { exportToSvg } from '@excalidraw/excalidraw'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
-import { SmilePlus } from 'lucide-react'
+import { Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
+import Menu, { type MenuGroup } from '@/components/Menu'
 import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
+import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { setIcon, splitFrontMatter } from './frontmatter'
+import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
 import { skeleton } from '@/components/ui'
@@ -37,6 +40,18 @@ async function boardPreview(root: FileSystemDirectoryHandle, path: string, previ
   }
 }
 
+const TURN_INTO: [BlockKind, string, MenuGroup['items'][number]['icon']][] = [
+  ['text', 'Text', Pilcrow],
+  ['h1', 'Heading 1', Heading1],
+  ['h2', 'Heading 2', Heading2],
+  ['h3', 'Heading 3', Heading3],
+  ['bullet', 'Bulleted list', List],
+  ['numbered', 'Numbered list', ListOrdered],
+  ['todo', 'To-do list', ListTodo],
+  ['quote', 'Quote', Quote],
+  ['code', 'Code', Code],
+]
+
 type Props = {
   root: FileSystemDirectoryHandle
   path: string
@@ -56,6 +71,8 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
   const [broken, setBroken] = useState('') // CSS selector list of links whose target is missing
   const previews = useRef(new Map<string, string>()) // board preview blob URL -> board path
+  const editor = useRef<Crepe>(undefined)
+  const [blockMenu, setBlockMenu] = useState<{ at: DOMRect; footer: string }>() // drag handle click menu
   const onSaveRef = useRef(onSave) // read by the load effect, which must not re-run when App re-renders
   useEffect(() => {
     onSaveRef.current = onSave
@@ -125,6 +142,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       )
       await crepe.create()
       if (!cancelled) setReady(true)
+      editor.current = crepe
       file = handle
 
       save.current = (newIcon) => {
@@ -152,6 +170,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       removeEventListener('focus', onFocus)
       cancelled = true
       if (timer) save.current() // flush pending edits when leaving the page
+      editor.current = undefined
       crepe?.destroy()
     }
   }, [root, path, rev])
@@ -175,6 +194,15 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   }, [path, exists])
 
   function openLink(e: React.MouseEvent) {
+    // Crepe's drag handle (the second handle button) selects its block on mousedown; a click opens the block menu.
+    const handle = (e.target as Element).closest('.milkdown-block-handle .operation-item:last-child')
+    if (handle && editor.current) {
+      const { words, characters } = countWords(editor.current.getMarkdown())
+      const at = handle.getBoundingClientRect()
+      // After the frame in which the block plugin re-focuses the editor, so the menu keeps focus.
+      requestAnimationFrame(() => setBlockMenu({ at, footer: `${words} words, ${characters} characters` }))
+      return
+    }
     const board = previews.current.get((e.target as HTMLElement).closest('img')?.src ?? '')
     if (board) return go(board)
     const href = (e.target as HTMLElement).closest('a')?.getAttribute('href')
@@ -219,7 +247,34 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
           )}
         </div>
       )}
-      <div ref={mount} onClick={openLink} />
+      <div
+        ref={mount}
+        onClick={openLink}
+        onKeyDownCapture={(e) => {
+          // Ctrl+D duplicates the block at the cursor; only here, so Chrome's bookmark shortcut never fires.
+          if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && editor.current) {
+            e.preventDefault()
+            duplicate(editor.current)
+          }
+        }}
+      />
+      {blockMenu && (
+        <Menu
+          label="Block actions"
+          anchor={blockMenu.at}
+          footer={blockMenu.footer}
+          onClose={() => setBlockMenu(undefined)}
+          groups={[
+            { label: 'Turn into', items: TURN_INTO.map(([kind, label, icon]) => ({ label, icon, onSelect: () => turnInto(editor.current!, kind) })) },
+            {
+              items: [
+                { label: 'Duplicate', icon: Copy, shortcut: 'Ctrl+D', onSelect: () => duplicate(editor.current!) },
+                { label: 'Delete', icon: Trash2, shortcut: 'Del', onSelect: () => remove(editor.current!) },
+              ],
+            },
+          ]}
+        />
+      )}
       {broken && <style>{`${broken} { color: var(--color-danger); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
       {conflict && (
         <ConflictDialog

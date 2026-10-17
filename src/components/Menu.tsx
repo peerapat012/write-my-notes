@@ -13,10 +13,16 @@ type Props = {
   onClose?: () => void
   /** Search field at the top; on by default once the menu has more than 6 items. */
   searchable?: boolean
+  /** Muted text under the items (e.g. a word count). */
+  footer?: ReactNode
 }
 
+/** The event as a shortcut label ("Del", "Ctrl+D"). Physical keys, so it works with a Thai layout too. */
+const shortcutOf = (e: React.KeyboardEvent) =>
+  (e.ctrlKey || e.metaKey ? 'Ctrl+' : '') + (e.key === 'Delete' ? 'Del' : e.code.startsWith('Key') ? e.code.slice(3) : e.key)
+
 /** The one menu style (Notion's block menu): optional search, muted group labels, icon + label + shortcut rows. */
-export default function Menu({ label, groups, anchor, onClose, searchable }: Props) {
+export default function Menu({ label, groups, anchor, onClose, searchable, footer }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const id = useId()
   const [query, setQuery] = useState('')
@@ -46,6 +52,12 @@ export default function Menu({ label, groups, anchor, onClose, searchable }: Pro
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
+    // An item's shortcut runs it while the menu is open; plain keys only when the search field is empty.
+    const hit = (query === '' || e.ctrlKey || e.metaKey) && groups.flatMap((g) => g.items).find((i) => i.shortcut === shortcutOf(e))
+    if (hit) {
+      e.preventDefault()
+      return select(hit)
+    }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
       const step = e.key === 'ArrowDown' ? 1 : -1
@@ -113,6 +125,7 @@ export default function Menu({ label, groups, anchor, onClose, searchable }: Pro
         ))}
         {!items.length && <div className="px-2 py-1.5 text-sm text-neutral-500">No results</div>}
       </div>
+      {footer && <div className="border-t border-neutral-200 px-3 py-2 text-xs text-neutral-500">{footer}</div>}
     </div>
   )
 }
