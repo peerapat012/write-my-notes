@@ -40,7 +40,7 @@ export default function SearchPalette({ index, go }: { index: SearchIndex; go: (
     <dialog
       ref={dialog}
       aria-label="Search pages"
-      className="mx-auto mt-[15vh] w-full max-w-xl rounded-lg border border-neutral-200 p-0 shadow-xl backdrop:bg-black/20"
+      className="mx-auto mt-[15vh] w-full max-w-xl rounded-lg border border-neutral-200 bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-black/20"
       onClick={(e) => e.target === dialog.current && dialog.current.close()}
     >
       <label className="flex items-center gap-2 border-b border-neutral-200 px-3">

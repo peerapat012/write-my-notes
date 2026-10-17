@@ -1,5 +1,5 @@
-import { FileText, Folder, Pencil, Plus, Presentation } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { FileText, Folder, Pencil, Plus, Presentation, Settings as SettingsIcon } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import BoardPage from './BoardPage'
 import DocPage from './DocPage'
 import { createPage, flushes, listEntries, loadRoot, movePage, saveRoot } from './fs'
@@ -7,6 +7,8 @@ import { movedPath } from './links'
 import NameInput from './NameInput'
 import SearchPalette from './SearchPalette'
 import type { SearchIndex } from './search'
+import { loadSettings, saveSettings, type Settings } from './settings'
+import SettingsDialog from './SettingsDialog'
 import { buildTree, type Entry, type TreeNode } from './tree'
 
 const pageUrl = (path: string) => '/page/' + path.split('/').map(encodeURIComponent).join('/')
@@ -15,6 +17,12 @@ const currentPage = () =>
 const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0))
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name)
 const ext = (path: string) => path.match(/\.(md|excalidraw)$/)?.[0] ?? ''
+
+const darkQuery = matchMedia('(prefers-color-scheme: dark)')
+const subscribeDark = (cb: () => void) => {
+  darkQuery.addEventListener('change', cb)
+  return () => darkQuery.removeEventListener('change', cb)
+}
 
 type Move = (from: string, to: string) => void
 
@@ -31,6 +39,16 @@ export default function App() {
   )
   const [page, setPage] = useState(currentPage)
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
+  const [settings, setSettings] = useState(() => loadSettings())
+  const [showSettings, setShowSettings] = useState(false)
+  const systemDark = useSyncExternalStore(subscribeDark, () => darkQuery.matches)
+  const dark = settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
+  useLayoutEffect(() => void document.documentElement.classList.toggle('dark', dark), [dark]) // before paint: no light flash
+
+  function changeSettings(next: Settings) {
+    setSettings(next)
+    saveSettings(next)
+  }
 
   async function open(dir: FileSystemDirectoryHandle) {
     setRoot(dir)
@@ -128,6 +146,9 @@ export default function App() {
             <Tree nodes={tree} page={page} go={go} create={create} move={move} />
           </>
         )}
+        <button className="mt-auto flex items-center gap-2 rounded px-2 py-1 text-left hover:bg-neutral-100" onClick={() => setShowSettings(true)}>
+          <SettingsIcon size={16} /> Settings
+        </button>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto">
         {root && page?.endsWith('.md') ? (
@@ -142,12 +163,13 @@ export default function App() {
             onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} root={root} path={page} go={go} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} root={root} path={page} dark={dark} go={go} onRename={(name) => rename(page, name)} />
         ) : (
           <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
         )}
       </main>
       {root && <SearchPalette index={index} go={go} />}
+      {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

@@ -8,7 +8,7 @@ export default function ConflictDialog({ name, onAnswer }: { name: string; onAns
         e.preventDefault()
         onAnswer(false)
       }}
-      className="m-auto max-w-sm rounded-lg p-5 text-sm shadow-xl backdrop:bg-black/20"
+      className="m-auto max-w-sm rounded-lg border border-neutral-200 bg-white p-5 text-neutral-900 text-sm shadow-xl backdrop:bg-black/20"
     >
       <h2 className="font-semibold">“{name}” changed on disk</h2>
       <p className="mt-1 text-neutral-600">You have unsaved edits. Keep yours and overwrite the file, or load the version on disk?</p>

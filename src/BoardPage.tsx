@@ -44,7 +44,7 @@ import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from './fs'
 import NameInput from './NameInput'
 import { relativePath, resolvePath } from './paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -163,7 +163,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ root, path, dark, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
@@ -345,13 +345,14 @@ function Board({ root, path, go, onRename, reload }: Props & { reload: () => voi
         onDragOverCapture={(e) => e.dataTransfer.types.includes('text/x-page') && e.preventDefault()}
         onDropCapture={dropDoc}
         onDoubleClickCapture={openCard}
-        style={{ backgroundImage: 'radial-gradient(#a3a3a3 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+        style={{ backgroundImage: 'radial-gradient(var(--grid-dot) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
       >
         <Excalidraw
           excalidrawAPI={board.setApi}
           initialData={initialData}
           onChange={onChange}
           onPointerUp={onPointerUp}
+          theme={dark ? 'dark' : 'light'}
           UIOptions={{
             canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false },
           }}
