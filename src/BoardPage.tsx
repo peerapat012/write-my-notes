@@ -1,5 +1,6 @@
 import {
   CaptureUpdateAction,
+  convertToExcalidrawElements,
   Excalidraw,
   FONT_FAMILY,
   getSceneVersion,
@@ -9,19 +10,21 @@ import {
 } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { AppState, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
+import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
 import { useEffect, useRef, useState } from 'react'
-import { withIcon } from './board'
-import { dirty, getFile, writeFile } from './fs'
+import { swapURLs, toDisk } from './board'
+import { dirty, getFile, saveAsset, writeFile } from './fs'
+import { relativePath, resolvePath } from './paths'
 
 type Props = { root: FileSystemDirectoryHandle; path: string }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
-const TOOLS: [Tool, string, string][] = [
+const TOOLS: [Tool | 'sticky', string, string][] = [
   ['selection', '↖', 'Select (V)'],
   ['hand', '✋', 'Hand (H)'],
   ['text', 'T', 'Text (T)'],
   ['freedraw', '✎', 'Pen (P)'],
+  ['sticky', '▢', 'Sticky note (click to place)'],
   ['rectangle', '▭', 'Rectangle (R)'],
   ['ellipse', '◯', 'Ellipse (O)'],
   ['diamond', '◇', 'Diamond (D)'],
@@ -29,6 +32,9 @@ const TOOLS: [Tool, string, string][] = [
   ['arrow', '→', 'Arrow (A)'],
   ['eraser', '⌫', 'Eraser (E)'],
 ]
+const EMOJIS = '😀 😂 😍 🤔 😎 😢 😡 👍 👎 👏 🙏 💪 🔥 ⭐ ❤️ ✅ ❌ ⚠️ ❓ 💡 🎉 🚀 📌 📝'.split(' ')
+const STICKY = 200
+
 const FILLS = ['transparent', '#ffec99', '#b2f2bb', '#a5d8ff', '#ffc9c9', '#e9ecef']
 const SIZES = [14, 18, 24, 34, 48]
 const FONTS = [
@@ -49,6 +55,7 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
   let api: ExcalidrawImperativeAPI | undefined
   let file: FileSystemFileHandle
   let icon: string | undefined
+  let links: Record<string, string> = {} // fileId -> relative `assets/` link already on disk
   let version: number | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let writing = Promise.resolve()
@@ -57,10 +64,18 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
     clearTimeout(timer)
     timer = undefined
     const app = { ...api!.getAppState(), viewBackgroundColor: '#ffffff' }
-    const json = withIcon(serializeAsJSON(api!.getSceneElements(), app, api!.getFiles(), 'local'), icon)
-    writing = writing.then(() => writeFile(file, json)).then(() => {
-      if (!timer) dirty.delete(path)
-    })
+    const files = api!.getFiles()
+    const json = serializeAsJSON(api!.getSceneElements(), app, files, 'local')
+    writing = writing
+      .then(async () => {
+        for (const [id, f] of Object.entries(files))
+          if (!links[id] && f.dataURL.startsWith('data:'))
+            links = { ...links, [id]: relativePath(path, await saveAsset(root, await (await fetch(f.dataURL)).blob())) }
+        await writeFile(file, toDisk(json, icon, links))
+      })
+      .then(() => {
+        if (!timer) dirty.delete(path)
+      })
   }
 
   return {
@@ -70,7 +85,17 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
       file = await getFile(root, path)
       const data = JSON.parse(await (await file.getFile()).text())
       icon = data.icon
-      return data
+      const urls: Record<string, string> = {}
+      for (const [id, f] of Object.entries((data.files ?? {}) as BinaryFiles)) {
+        if (f.dataURL.startsWith('data:')) continue
+        links[id] = f.dataURL
+        try {
+          urls[id] = await dataURL(await (await getFile(root, resolvePath(path, f.dataURL))).getFile())
+        } catch {
+          console.warn('missing board image', f.dataURL) // keep the link so the next save doesn't drop it
+        }
+      }
+      return { ...data, files: swapURLs(data.files ?? {}, urls) }
     },
     changed(elements: readonly ExcalidrawElement[]) {
       const v = getSceneVersion(elements)
@@ -86,11 +111,20 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
   }
 }
 
+const dataURL = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result as string)
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(blob)
+  })
+
 export default function BoardPage({ root, path }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: false })
+  const [emojis, setEmojis] = useState(false)
   const [initialData] = useState(async (): Promise<ExcalidrawInitialDataState> => {
     const data = await board.load()
     setIcon(data.icon)
@@ -104,10 +138,53 @@ export default function BoardPage({ root, path }: Props) {
     const style = box.current!.style
     style.backgroundSize = `${20 * z}px ${20 * z}px`
     style.backgroundPosition = `${app.scrollX * z}px ${app.scrollY * z}px`
-    const next = { tool: app.activeTool.type, zoom: Math.round(z * 100), selected: Object.keys(app.selectedElementIds).length > 0 }
+    const next = { tool: app.activeTool.customType ?? app.activeTool.type, zoom: Math.round(z * 100), selected: Object.keys(app.selectedElementIds).length > 0 }
     setUi((u) => (u.tool === next.tool && u.zoom === next.zoom && u.selected === next.selected ? u : next))
 
     board.changed(elements)
+  }
+
+  /** Adds element skeletons to the scene and selects them. */
+  function add(skeletons: Parameters<typeof convertToExcalidrawElements>[0]) {
+    const a = board.api()!
+    const added = convertToExcalidrawElements(skeletons)
+    a.updateScene({
+      elements: [...a.getSceneElementsIncludingDeleted(), ...added],
+      appState: { selectedElementIds: { [added[0].id]: true }, activeTool: { ...a.getAppState().activeTool, type: 'selection', customType: null } } as AppState,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
+  }
+
+  function placeEmoji(emoji: string) {
+    setEmojis(false)
+    const { width, height, scrollX, scrollY, zoom } = board.api()!.getAppState()
+    const x = width / 2 / zoom.value - scrollX
+    const y = height / 2 / zoom.value - scrollY
+    add([{ type: 'text', text: emoji, fontSize: 64, x: x - 40, y: y - 40 }])
+  }
+
+  // Sticky tool: Excalidraw's custom tool does nothing on its own; we place the note on pointer up.
+  function onPointerUp(tool: AppState['activeTool'], state: { origin: { x: number; y: number } }) {
+    if (tool.customType !== 'sticky') return
+    const c = board.api()!.getAppState().currentItemBackgroundColor
+    add([
+      {
+        type: 'rectangle',
+        x: state.origin.x - STICKY / 2,
+        y: state.origin.y - STICKY / 2,
+        width: STICKY,
+        height: STICKY,
+        backgroundColor: c === 'transparent' ? FILLS[1] : c,
+        fillStyle: 'solid',
+        strokeColor: 'transparent',
+        roughness: 0,
+        roundness: { type: 3 },
+      },
+    ])
+    // Enter on a selected shape opens its bound text editor, so the user can type right away.
+    requestAnimationFrame(() =>
+      box.current!.querySelector('.excalidraw')!.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', bubbles: true })),
+    )
   }
 
   // Excalidraw has no API for undo/redo/zoom; send it the same shortcuts the keyboard would.
@@ -171,9 +248,9 @@ export default function BoardPage({ root, path }: Props) {
           excalidrawAPI={board.setApi}
           initialData={initialData}
           onChange={onChange}
+          onPointerUp={onPointerUp}
           UIOptions={{
             canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false },
-            tools: { image: false },
           }}
         />
         <nav className="absolute top-1/2 left-3 z-10 flex [font-variant-emoji:text] -translate-y-1/2 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
@@ -184,12 +261,32 @@ export default function BoardPage({ root, path }: Props) {
               aria-label={label}
               aria-pressed={ui.tool === type}
               className={`${btn} ${ui.tool === type ? 'bg-neutral-200 hover:bg-neutral-200' : ''}`}
-              onClick={() => board.api()?.setActiveTool({ type } as never)}
+              onClick={() => board.api()?.setActiveTool(type === 'sticky' ? { type: 'custom', customType: type } : ({ type } as never))}
             >
               {icon}
             </button>
           ))}
+          <button title="Emoji" aria-label="Emoji" aria-expanded={emojis} className={btn} onClick={() => setEmojis((o) => !o)}>
+            ☺
+          </button>
+          <button
+            title="Image (or paste)"
+            aria-label="Image"
+            className={btn}
+            onClick={() => board.api()?.setActiveTool({ type: 'image', insertOnCanvasDirectly: true })}
+          >
+            ▣
+          </button>
         </nav>
+        {emojis && (
+          <div className="absolute top-1/2 left-16 z-10 grid w-56 -translate-y-1/2 grid-cols-6 gap-1 rounded-lg border border-neutral-200 bg-white p-1 text-xl shadow-sm">
+            {EMOJIS.map((e) => (
+              <button key={e} className="grid size-8 place-items-center rounded hover:bg-neutral-100" aria-label={e} onClick={() => placeEmoji(e)}>
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
         {ui.selected && (
           <div className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm">
             {FILLS.map((c) => (

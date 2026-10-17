@@ -59,7 +59,7 @@ export async function writeFile(file: FileSystemFileHandle, data: string | Blob)
 }
 
 /** Writes an image to `assets/img-<id>.<ext>` and returns that root-relative path. */
-export async function saveAsset(root: FileSystemDirectoryHandle, image: File) {
+export async function saveAsset(root: FileSystemDirectoryHandle, image: Blob) {
   const ext = image.type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'png'
   const name = `img-${crypto.randomUUID().slice(0, 8)}.${ext}`
   const assets = await root.getDirectoryHandle('assets', { create: true })
