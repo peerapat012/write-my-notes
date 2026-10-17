@@ -31,3 +31,12 @@ test('ignores front matter, board text, and empty queries', () => {
   expect(paths(index, 'icon')).toEqual([])
   expect(paths(index, '  ')).toEqual([])
 })
+
+test('#tag matches page tags', () => {
+  const index: SearchIndex = new Map([
+    ['a.md', '---\ntags: [journal, idea]\n---\nx'],
+    ['b.md', '---\ntags:\n  - Journal\n---\nx'],
+    ['c.md', '---\ntags: [other]\n---\njournal'],
+  ])
+  expect(paths(index, '#journal')).toEqual(['a.md', 'b.md'])
+})

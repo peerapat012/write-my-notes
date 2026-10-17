@@ -1,4 +1,4 @@
-import { splitFrontMatter } from '@/features/doc/frontmatter'
+import { getProps, splitFrontMatter } from '@/features/doc/frontmatter'
 
 /** Search index: page path -> its text. Boards map to '' so only their titles are searched (no board text, v2). */
 export type SearchIndex = Map<string, string>
@@ -11,6 +11,13 @@ const titleOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(
 export function search(index: SearchIndex, query: string, limit = 50): Hit[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
+  if (q.startsWith('#')) {
+    const tag = q.slice(1)
+    const byTag: Hit[] = []
+    for (const [path, text] of index)
+      if (path.endsWith('.md') && getProps(splitFrontMatter(text).front).tags.some((t) => t.toLowerCase().startsWith(tag))) byTag.push({ path, title: titleOf(path) })
+    return byTag.sort((a, b) => a.title.localeCompare(b.title)).slice(0, limit)
+  }
   const prefix: Hit[] = []
   const inTitle: Hit[] = []
   const inBody: Hit[] = []

@@ -93,7 +93,11 @@ export async function createPage(root: FileSystemDirectoryHandle, dir: string, n
   const folder = await dirAt(root, dir, true)
   const fileName = name + (type === 'doc' ? '.md' : '.excalidraw')
   const file = await folder.getFileHandle(fileName, { create: true })
-  if (type === 'board' && (await file.getFile()).size === 0) await writeFile(file, EMPTY_BOARD)
+  if ((await file.getFile()).size === 0)
+    await writeFile(file, type === 'board' ? EMPTY_BOARD : `---
+created: ${new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16)}
+---
+`)
   return dir ? `${dir}/${fileName}` : fileName
 }
 

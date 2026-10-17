@@ -5,13 +5,13 @@ import { exportToSvg } from '@excalidraw/excalidraw'
 import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
-import { Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Trash2 } from 'lucide-react'
+import { CalendarClock, Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
 import Menu, { type MenuGroup } from '@/components/Menu'
 import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
-import { setIcon, splitFrontMatter } from './frontmatter'
+import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
@@ -64,8 +64,9 @@ type Props = {
 
 export default function DocPage({ root, path, exists, go, onRename, onIconChange, onSave }: Props) {
   const mount = useRef<HTMLDivElement>(null)
-  const save = useRef<(icon?: string) => Promise<void>>(async () => {})
+  const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
+  const [props, setProps] = useState<ReturnType<typeof getProps>>({ created: undefined, tags: [] })
   const [ready, setReady] = useState(false) // editor created; shows the loading state until then
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
@@ -111,6 +112,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       known = disk.lastModified
       let { front, body } = splitFrontMatter(text)
       setIconState(parseIcon(path, text))
+      setProps(getProps(front))
 
       crepe = new Crepe({
         root: mount.current,
@@ -145,10 +147,10 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
       editor.current = crepe
       file = handle
 
-      save.current = (newIcon) => {
+      save.current = (patch) => {
         clearTimeout(timer)
         timer = undefined
-        if (newIcon) front = setIcon(front, newIcon)
+        if (patch) front = patch(front)
         // Image blocks store their resize ratio as alt text; drop the default so plain `![](...)` stays plain.
         const content = front + crepe!.getMarkdown().replace(/!\[1\.00\]\(/g, '![](')
         onSaveRef.current(content)
@@ -217,7 +219,12 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
     const next = [...new Intl.Segmenter().segment(value.trim())].at(-1)?.segment
     if (!next) return
     setIconState(next)
-    save.current(next).then(onIconChange)
+    save.current((f) => setIcon(f, next)).then(onIconChange)
+  }
+
+  function changeTags(tags: string[]) {
+    setProps((p) => ({ ...p, tags }))
+    save.current((f) => setTags(f, tags))
   }
 
   const title = path.slice(path.lastIndexOf('/') + 1, -'.md'.length)
@@ -240,6 +247,38 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
           className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-400"
         />
       </h1>
+      <div className="mb-6 space-y-1 text-sm">
+        {props.created && (
+          <Row icon={CalendarClock} name="Created">
+            {new Date(props.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          </Row>
+        )}
+        <Row icon={Tag} name="Tags">
+          <div className="flex flex-wrap items-center gap-1">
+            {props.tags.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 rounded bg-neutral-100 py-0.5 pr-1 pl-2">
+                {t}
+                <button aria-label={`Remove tag ${t}`} className="rounded text-neutral-400 hover:text-neutral-700" onClick={() => changeTags(props.tags.filter((x) => x !== t))}>
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+            <input
+              aria-label="Add tag"
+              placeholder="Add tag"
+              className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-400"
+              onKeyDown={(e) => {
+                const input = e.currentTarget
+                const tag = input.value.replace(/[,\[\]"']/g, '').trim()
+                if (e.key === 'Enter' && tag) {
+                  if (!props.tags.includes(tag)) changeTags([...props.tags, tag])
+                  input.value = ''
+                } else if (e.key === 'Backspace' && !input.value && props.tags.length) changeTags(props.tags.slice(0, -1))
+              }}
+            />
+          </div>
+        </Row>
+      </div>
       {!ready && (
         <div aria-label="Loading page" className="space-y-3 pt-1">
           {[92, 100, 84, 0, 96, 70].map((w, i) =>
@@ -285,6 +324,18 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
           }}
         />
       )}
+    </div>
+  )
+}
+
+function Row({ icon: Icon, name, children }: { icon: typeof Tag; name: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-7 items-center gap-2">
+      <div className="flex w-32 shrink-0 items-center gap-2 text-neutral-500">
+        <Icon size={16} strokeWidth={1.75} />
+        {name}
+      </div>
+      {children}
     </div>
   )
 }
