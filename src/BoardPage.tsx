@@ -38,10 +38,11 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { swapURLs, toDisk } from './board'
 import ConflictDialog from './ConflictDialog'
-import { diskAction, dirty, getFile, saveAsset, writeFile } from './fs'
+import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from './fs'
+import NameInput from './NameInput'
 import { relativePath, resolvePath } from './paths'
 
-type Props = { root: FileSystemDirectoryHandle; path: string }
+type Props = { root: FileSystemDirectoryHandle; path: string; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -137,7 +138,11 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
       clearTimeout(timer)
       timer = setTimeout(save, 500)
     },
-    flush: () => void (timer && save()),
+    /** Saves pending edits now; resolves once written. */
+    flush() {
+      if (timer) save()
+      return writing
+    },
     /** Window focus: reloads, or asks, if the file changed on disk since we last read or wrote it. */
     async check(ask: () => Promise<boolean>, reload: () => void) {
       if (!file || checking) return
@@ -172,7 +177,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ root, path, reload }: Props & { reload: () => void }) {
+function Board({ root, path, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
@@ -186,7 +191,13 @@ function Board({ root, path, reload }: Props & { reload: () => void }) {
 
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
 
-  useEffect(() => board.flush, [board]) // flush pending edits when leaving the page
+  useEffect(() => {
+    flushes.add(board.flush)
+    return () => {
+      flushes.delete(board.flush)
+      board.flush() // flush pending edits when leaving the page
+    }
+  }, [board])
   useEffect(() => {
     const onFocus = () => board.check(() => new Promise((r) => setConflict(() => r)), reload)
     addEventListener('focus', onFocus)
@@ -273,7 +284,8 @@ function Board({ root, path, reload }: Props & { reload: () => void }) {
           <ArrowLeft size={18} />
         </button>
         <h1 className="mr-auto flex items-center gap-1.5 truncate px-2 font-medium">
-          {icon ?? <Presentation size={18} />} {title}
+          {icon ?? <Presentation size={18} />}
+          <NameInput value={title} onDone={(name) => name !== title && onRename(name)} className="min-w-0 rounded bg-transparent px-1 hover:bg-neutral-100" />
         </h1>
         <button className={btn} title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => keys('KeyZ', 'z')}>
           <Undo2 size={18} />

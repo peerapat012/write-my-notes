@@ -5,19 +5,29 @@ import { remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import { SmilePlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from './ConflictDialog'
-import { diskAction, dirty, getFile, saveAsset, writeFile } from './fs'
+import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from './fs'
 import { setIcon, splitFrontMatter } from './frontmatter'
+import { linkTarget } from './links'
+import NameInput from './NameInput'
 import { relativePath, resolvePath } from './paths'
 import { parseIcon } from './tree'
 
-type Props = { root: FileSystemDirectoryHandle; path: string; onIconChange: () => void }
+type Props = {
+  root: FileSystemDirectoryHandle
+  path: string
+  exists: Set<string> // every path in the notes folder, for broken-link marks
+  go: (path: string) => void
+  onRename: (name: string) => void
+  onIconChange: () => void
+}
 
-export default function DocPage({ root, path, onIconChange }: Props) {
+export default function DocPage({ root, path, exists, go, onRename, onIconChange }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(icon?: string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
+  const [broken, setBroken] = useState('') // CSS selector list of links whose target is missing
 
   useEffect(() => {
     let crepe: Crepe | undefined
@@ -63,7 +73,7 @@ export default function DocPage({ root, path, onIconChange }: Props) {
             proxyDomURL: async (url) =>
               /^[a-z]+:/i.test(url)
                 ? url
-                : URL.createObjectURL(await (await getFile(root, resolvePath(path, url))).getFile()),
+                : getFile(root, resolvePath(path, url)).then((h) => h.getFile()).then(URL.createObjectURL, () => url),
           },
         },
       })
@@ -95,14 +105,44 @@ export default function DocPage({ root, path, onIconChange }: Props) {
       }
     })
 
+    const flush = () => (timer ? save.current() : writing)
+    flushes.add(flush)
     addEventListener('focus', onFocus)
     return () => {
+      flushes.delete(flush)
       removeEventListener('focus', onFocus)
       cancelled = true
       if (timer) save.current() // flush pending edits when leaving the page
       crepe?.destroy()
     }
   }, [root, path, rev])
+
+  // Find links whose target is missing as the editor re-renders and as the folder changes. Styled from a
+  // <style> rule, not by touching the editor DOM: ProseMirror would treat attribute changes as edits.
+  useEffect(() => {
+    const el = mount.current!
+    const mark = () => {
+      const hrefs = [...el.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')!)
+      const missing = hrefs.filter((h) => {
+        const target = linkTarget(path, h)
+        return target !== undefined && !exists.has(target)
+      })
+      setBroken([...new Set(missing)].map((h) => `main .milkdown a[href="${CSS.escape(h)}"]`).join(','))
+    }
+    const observer = new MutationObserver(mark)
+    observer.observe(el, { childList: true, subtree: true })
+    mark()
+    return () => observer.disconnect()
+  }, [path, exists])
+
+  function openLink(e: React.MouseEvent) {
+    const href = (e.target as HTMLElement).closest('a')?.getAttribute('href')
+    const target = href ? linkTarget(path, href) : undefined
+    if (target && exists.has(target)) {
+      e.preventDefault()
+      go(target)
+    }
+  }
 
   function changeIcon(value: string) {
     const next = [...new Intl.Segmenter().segment(value.trim())].at(-1)?.segment
@@ -124,8 +164,11 @@ export default function DocPage({ root, path, onIconChange }: Props) {
         />
         {!icon && <SmilePlus className="pointer-events-none absolute inset-0 m-auto text-neutral-400" size={28} />}
       </div>
-      <h1 className="mb-4 text-4xl font-bold">{title}</h1>
-      <div ref={mount} />
+      <h1 className="mb-4 text-4xl font-bold">
+        <NameInput value={title} onDone={(name) => name !== title && onRename(name)} className="w-full rounded bg-transparent outline-none" />
+      </h1>
+      <div ref={mount} onClick={openLink} />
+      {broken && <style>{`${broken} { color: var(--color-red-600); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
       {conflict && (
         <ConflictDialog
           name={title}

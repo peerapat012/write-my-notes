@@ -1,23 +1,33 @@
-import { FileText, Folder, Plus, Presentation } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { FileText, Folder, Pencil, Plus, Presentation } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import BoardPage from './BoardPage'
 import DocPage from './DocPage'
-import { createPage, listEntries, loadRoot, saveRoot } from './fs'
-import { buildTree, type TreeNode } from './tree'
+import { createPage, flushes, listEntries, loadRoot, movePage, saveRoot } from './fs'
+import { movedPath } from './links'
+import NameInput from './NameInput'
+import { buildTree, type Entry, type TreeNode } from './tree'
 
 const pageUrl = (path: string) => '/page/' + path.split('/').map(encodeURIComponent).join('/')
 const currentPage = () =>
   location.pathname.startsWith('/page/') ? decodeURIComponent(location.pathname.slice('/page/'.length)) : null
+const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0))
+const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name)
+const ext = (path: string) => path.match(/\.(md|excalidraw)$/)?.[0] ?? ''
+
+type Move = (from: string, to: string) => void
 
 export default function App() {
   const [root, setRoot] = useState<FileSystemDirectoryHandle>()
   const [stored, setStored] = useState<FileSystemDirectoryHandle>()
-  const [tree, setTree] = useState<TreeNode[]>([])
+  const [entries, setEntries] = useState<Entry[]>([])
+  const tree = useMemo(() => buildTree(entries), [entries])
+  const exists = useMemo(() => new Set(entries.map((e) => e.path)), [entries])
   const [page, setPage] = useState(currentPage)
+  const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
 
   async function open(dir: FileSystemDirectoryHandle) {
     setRoot(dir)
-    setTree(buildTree(await listEntries(dir)))
+    setEntries(await listEntries(dir))
   }
 
   useEffect(() => {
@@ -34,7 +44,7 @@ export default function App() {
   // Rescan on focus to catch pages added or removed on disk (e.g. by `git pull`).
   useEffect(() => {
     if (!root) return
-    const onFocus = () => listEntries(root).then((entries) => setTree(buildTree(entries)))
+    const onFocus = () => listEntries(root).then(setEntries)
     addEventListener('focus', onFocus)
     return () => removeEventListener('focus', onFocus)
   }, [root])
@@ -61,6 +71,24 @@ export default function App() {
     setPage(path)
   }
 
+  async function move(from: string, to: string) {
+    if (!root || from === to) return
+    try {
+      await Promise.all([...flushes].map((f) => f()))
+      await movePage(root, from, to)
+    } catch (e) {
+      alert(`Could not move: ${e}`)
+      return open(root)
+    }
+    await open(root)
+    const next = page && movedPath(page, from, to)
+    if (next !== page) history.replaceState(null, '', pageUrl(next!))
+    setPage(next)
+    setRev((r) => r + 1)
+  }
+
+  const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
+
   async function create(dir: string, type: 'doc' | 'board') {
     const name = prompt(`New ${type} name`)?.trim()
     if (!root || !name) return
@@ -82,19 +110,31 @@ export default function App() {
         </button>
         {root && (
           <>
-            <div className="flex items-center justify-between px-2 font-medium">
+            <div
+              className="flex items-center justify-between rounded px-2 font-medium"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => drop(e, '', move)}
+            >
               {root.name}
               <AddMenu onAdd={(type) => create('', type)} />
             </div>
-            <Tree nodes={tree} page={page} go={go} create={create} />
+            <Tree nodes={tree} page={page} go={go} create={create} move={move} />
           </>
         )}
       </aside>
       <main className="min-w-0 flex-1 overflow-auto">
         {root && page?.endsWith('.md') ? (
-          <DocPage key={page} root={root} path={page} onIconChange={() => open(root)} />
+          <DocPage
+            key={page + rev}
+            root={root}
+            path={page}
+            exists={exists}
+            go={go}
+            onRename={(name) => rename(page, name)}
+            onIconChange={() => open(root)}
+          />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page} root={root} path={page} />
+          <BoardPage key={page + rev} root={root} path={page} onRename={(name) => rename(page, name)} />
         ) : (
           <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
         )}
@@ -108,6 +148,15 @@ type TreeProps = {
   page: string | null
   go: (path: string) => void
   create: (dir: string, type: 'doc' | 'board') => void
+  move: Move
+}
+
+/** Drop handler: moves the dragged page or folder into folder `dir`. */
+function drop(e: React.DragEvent, dir: string, move: Move) {
+  e.preventDefault()
+  e.stopPropagation()
+  const from = e.dataTransfer.getData('text/x-page')
+  if (from && parentOf(from) !== dir) move(from, join(dir, from.slice(from.lastIndexOf('/') + 1)))
 }
 
 function Tree({ nodes, ...props }: TreeProps) {
@@ -122,12 +171,33 @@ function Tree({ nodes, ...props }: TreeProps) {
   )
 }
 
-function Node({ node, page, go, create }: { node: TreeNode } & Omit<TreeProps, 'nodes'>) {
+function Node({ node, ...props }: { node: TreeNode } & Omit<TreeProps, 'nodes'>) {
+  const { page, go, create, move } = props
+  const [editing, setEditing] = useState(false)
   const isPage = node.type !== 'folder'
   const childDir = isPage ? node.path.replace(/\.(md|excalidraw)$/, '') : node.path
   const label = (
-    <span className="group flex items-center gap-1">
-      {isPage ? (
+    <span
+      className="group flex items-center gap-1 rounded"
+      draggable={!editing}
+      onDragStart={(e) => {
+        e.stopPropagation()
+        e.dataTransfer.setData('text/x-page', node.path)
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => drop(e, childDir, move)}
+    >
+      {editing ? (
+        <NameInput
+          autoFocus
+          value={node.name}
+          className="min-w-0 flex-1 rounded border border-neutral-300 px-1"
+          onDone={(name) => {
+            setEditing(false)
+            move(node.path, join(parentOf(node.path), name + ext(node.path)))
+          }}
+        />
+      ) : isPage ? (
         <a
           href={pageUrl(node.path)}
           onClick={(e) => {
@@ -143,7 +213,18 @@ function Node({ node, page, go, create }: { node: TreeNode } & Omit<TreeProps, '
           <Folder size={16} /> {node.name}
         </span>
       )}
-      <span className="invisible group-hover:visible">
+      <span className="invisible flex group-hover:visible">
+        <button
+          title="Rename"
+          aria-label="Rename"
+          className="grid size-5 place-items-center rounded hover:bg-neutral-200"
+          onClick={(e) => {
+            e.preventDefault() // inside <summary>: don't toggle
+            setEditing(true)
+          }}
+        >
+          <Pencil size={12} />
+        </button>
         <AddMenu onAdd={(type) => create(childDir, type)} />
       </span>
     </span>
@@ -152,7 +233,7 @@ function Node({ node, page, go, create }: { node: TreeNode } & Omit<TreeProps, '
   return (
     <details open>
       <summary className="cursor-pointer">{label}</summary>
-      <Tree nodes={node.children} page={page} go={go} create={create} />
+      <Tree nodes={node.children} {...props} />
     </details>
   )
 }

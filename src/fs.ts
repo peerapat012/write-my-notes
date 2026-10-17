@@ -1,3 +1,4 @@
+import { movedPath, rewriteLinks } from './links'
 import { parseIcon, type Entry } from './tree'
 
 // Chromium-only File System Access bits missing from lib.dom.
@@ -45,15 +46,24 @@ export async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): 
 /** Paths of open docs and boards with edits not yet written to disk. Ticket 07 reads this. */
 export const dirty = new Set<string>()
 
+/** Open pages' flush: save pending edits now, resolve once written. Moves await these before reading files. */
+export const flushes = new Set<() => Promise<void>>()
+
 /** On window focus: what to do when an open file's `lastModified` differs from the one we last read or wrote. */
 export const diskAction = (known: number, onDisk: number, isDirty: boolean) =>
   onDisk === known ? 'ignore' : isDirty ? 'ask' : 'reload'
 
+/** Folder at relative path `dir` ('' = root). */
+async function dirAt(root: FileSystemDirectoryHandle, dir: string, create = false) {
+  for (const part of dir.split('/').filter(Boolean)) root = await root.getDirectoryHandle(part, { create })
+  return root
+}
+
+const splitPath = (path: string) => [path.slice(0, Math.max(path.lastIndexOf('/'), 0)), path.slice(path.lastIndexOf('/') + 1)]
+
 export async function getFile(root: FileSystemDirectoryHandle, path: string) {
-  const parts = path.split('/')
-  let dir = root
-  for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part)
-  return dir.getFileHandle(parts.at(-1)!)
+  const [dir, name] = splitPath(path)
+  return (await dirAt(root, dir)).getFileHandle(name)
 }
 
 export async function writeFile(file: FileSystemFileHandle, data: string | Blob) {
@@ -79,10 +89,42 @@ const EMPTY_BOARD = JSON.stringify(
 
 /** Creates `<dir>/<name>.<ext>`; `dir` is a relative folder path ('' = root). Returns the new file's path. */
 export async function createPage(root: FileSystemDirectoryHandle, dir: string, name: string, type: 'doc' | 'board') {
-  let folder = root
-  for (const part of dir.split('/').filter(Boolean)) folder = await folder.getDirectoryHandle(part, { create: true })
+  const folder = await dirAt(root, dir, true)
   const fileName = name + (type === 'doc' ? '.md' : '.excalidraw')
   const file = await folder.getFileHandle(fileName, { create: true })
   if (type === 'board' && (await file.getFile()).size === 0) await writeFile(file, EMPTY_BOARD)
   return dir ? `${dir}/${fileName}` : fileName
+}
+
+async function copyInto(handle: FileSystemHandle, dir: FileSystemDirectoryHandle, name: string) {
+  if (handle instanceof FileSystemFileHandle) return writeFile(await dir.getFileHandle(name, { create: true }), await handle.getFile())
+  const to = await dir.getDirectoryHandle(name, { create: true })
+  for await (const [n, h] of (handle as FileSystemDirectoryHandle).entries()) await copyInto(h, to, n)
+}
+
+// ponytail: copy + delete everywhere; FileSystemHandle.move() can't move directories on the local file system.
+async function moveEntry(root: FileSystemDirectoryHandle, from: string, to: string) {
+  const [fromDir, fromName] = splitPath(from)
+  const [toDir, toName] = splitPath(to)
+  const src = await dirAt(root, fromDir)
+  const handle = await src.getFileHandle(fromName).catch(() => src.getDirectoryHandle(fromName))
+  await copyInto(handle, await dirAt(root, toDir, true), toName)
+  await src.removeEntry(fromName, { recursive: true })
+}
+
+/** Moves page (or folder) `from` to `to` with its child folder, rewriting links to and from everything moved. */
+export async function movePage(root: FileSystemDirectoryHandle, from: string, to: string) {
+  const entries = await listEntries(root)
+  const moved = entries.filter((e) => movedPath(e.path, from, to) !== e.path)
+  // Case-insensitive: on Windows "a.md" -> "A.md" is the same file, and copy + delete would lose it.
+  const taken = new Set(entries.map((e) => e.path.toLowerCase()))
+  if (moved.some((e) => taken.has(movedPath(e.path, from, to).toLowerCase())) || movedPath(to, from, to) !== to) {
+    throw new Error(`"${to}" already exists or is inside "${from}"`)
+  }
+  const texts: Record<string, string> = {}
+  for (const e of entries)
+    if (/\.(md|excalidraw)$/.test(e.path)) texts[e.path] = await (await (await getFile(root, e.path)).getFile()).text()
+  const rewritten = rewriteLinks(texts, from, to)
+  for (const e of moved) if (!moved.some((m) => e.path.startsWith(m.path + '/'))) await moveEntry(root, e.path, movedPath(e.path, from, to))
+  for (const [path, text] of Object.entries(rewritten)) await writeFile(await getFile(root, path), text)
 }
