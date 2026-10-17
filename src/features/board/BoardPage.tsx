@@ -52,7 +52,7 @@ import NameInput from '@/components/NameInput'
 import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
 
-type Props = { vault: Vault; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { vault: Vault; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -175,7 +175,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ vault, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ vault, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(vault, path))
   const [icon, setIcon] = useState<string>()
@@ -471,7 +471,7 @@ function Board({ vault, path, dark, model, onSummary, go, onRename, reload }: Pr
             ))}
           </div>
         )}
-        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} onSummarize={summarizeBoard} />}
+        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} onSummarize={summarizeBoard} openSettings={openSettings} />}
         {ui.selected > 0 && (
           <div
             className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}

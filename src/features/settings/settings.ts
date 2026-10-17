@@ -1,5 +1,5 @@
 export type Theme = 'light' | 'dark' | 'system'
-export type Settings = { theme: Theme; model: string }
+export type Settings = { theme: Theme; model: string; key: string }
 
 export const DEFAULT_MODEL = 'gemini-3.5-flash'
 const KEY = 'write-my-notes:settings'
@@ -15,6 +15,7 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): 
   return {
     theme: ['light', 'dark', 'system'].includes(saved.theme!) ? saved.theme! : 'system',
     model: (typeof saved.model === 'string' && saved.model.trim()) || DEFAULT_MODEL,
+    key: typeof saved.key === 'string' ? saved.key.trim() : '',
   }
 }
 

@@ -118,11 +118,9 @@ Implementation:
 
 ## Security
 
-- The Gemini key is read from `import.meta.env.VITE_GEMINI_API_KEY`, set in `.env.local`.
+- **v2 changed this:** the key comes from Settings (BYOK), and no key is built into any bundle. See [SPEC-v2.md](SPEC-v2.md#byok). The v1 text below no longer applies, except that `VITE_GEMINI_API_KEY` in `.env.local` is a dev-only fallback.
 - `.env.local` and `.env*.local` are in `.gitignore` from the first commit. A `.env.example` holds the variable name only.
-- Vite inlines the key into the JS bundle. Never deploy the build publicly, and never share the build. Run the app only on `localhost`, or in Tauri on your own machine.
-- Restrict the key in the Google Cloud console to the Gemini API, with a low quota.
-- Move to BYOK (key entered in Settings) before giving the app to anyone else.
+- Restrict your key in the Google Cloud console to the Gemini API, with a low quota.
 - The notes folder never contains secrets.
 
 ## Tests (Vitest, pure logic)

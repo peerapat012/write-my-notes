@@ -1,7 +1,7 @@
 import { FileText, Loader2, Sparkles, StickyNote, Workflow, ListTree } from 'lucide-react'
 import { useState } from 'react'
 import { panel } from '@/components/ui'
-import { NO_KEY } from '@/ai/gemini'
+import { geminiKey, NO_KEY } from '@/ai/gemini'
 import type { Mode } from '@/ai/create'
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
   onEdit: (instruction: string) => Promise<void>
   onCreate: (mode: Mode, prompt: string, n: number) => Promise<void>
   onSummarize: () => Promise<void>
+  openSettings: () => void
 }
 
 const MODES: [Mode, string, typeof Sparkles][] = [
@@ -18,12 +19,12 @@ const MODES: [Mode, string, typeof Sparkles][] = [
 ]
 
 /** Top-bar AI popover: a prompt and the actions that use it. */
-export default function AiPanel({ selected, onEdit, onCreate, onSummarize }: Props) {
+export default function AiPanel({ selected, onEdit, onCreate, onSummarize, openSettings }: Props) {
   const [prompt, setPrompt] = useState('')
   const [n, setN] = useState(6)
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState('')
-  const noKey = !import.meta.env.VITE_GEMINI_API_KEY
+  const noKey = !geminiKey() // re-read each render: Settings is a modal over this page, so closing it re-renders
 
   async function run(what: string, action: () => Promise<void>) {
     setBusy(what)
@@ -40,7 +41,13 @@ export default function AiPanel({ selected, onEdit, onCreate, onSummarize }: Pro
 
   return (
     <div role="dialog" aria-label="AI" className={`${panel} absolute top-3 right-3 z-30 flex w-80 flex-col gap-2 p-3`}>
-      {noKey && <p className="rounded-md bg-neutral-100 p-2 text-[13px] text-neutral-700">{NO_KEY}</p>}
+      {noKey && (
+        <p className="rounded-md bg-neutral-100 p-2 text-[13px] text-neutral-700">
+          <button className="underline" onClick={openSettings}>
+            {NO_KEY}
+          </button>
+        </p>
+      )}
       <textarea
         aria-label="AI prompt"
         autoFocus

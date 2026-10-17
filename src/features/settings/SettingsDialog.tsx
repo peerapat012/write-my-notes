@@ -11,7 +11,7 @@ const THEMES = [
 
 type Props = { settings: Settings; onChange: (settings: Settings) => void; onClose: () => void }
 
-/** Theme and Gemini model name. Every change applies and saves immediately. */
+/** Theme, Gemini model name and API key. Every change applies and saves immediately. */
 export default function SettingsDialog({ settings, onChange, onClose }: Props) {
   return (
     <Dialog aria-label="Settings" onClose={onClose}>
@@ -45,6 +45,19 @@ export default function SettingsDialog({ settings, onChange, onClose }: Props) {
           spellCheck={false}
           onChange={(e) => onChange({ ...settings, model: e.target.value })}
         />
+      </label>
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-neutral-500">Gemini API key</span>
+        <input
+          type="password"
+          autoComplete="off"
+          className={input}
+          value={settings.key}
+          placeholder="Paste your key"
+          spellCheck={false}
+          onChange={(e) => onChange({ ...settings, key: e.target.value })}
+        />
+        <span className="mt-1.5 block text-xs text-neutral-500">The key stays in this browser and is sent only to Google.</span>
       </label>
       <div className="mt-5 flex justify-end">
         <button autoFocus className={primaryButton} onClick={onClose}>

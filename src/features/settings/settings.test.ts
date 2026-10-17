@@ -2,18 +2,19 @@ import { expect, test } from 'vitest'
 import { DEFAULT_MODEL, loadSettings, saveSettings } from './settings'
 
 const store = (value: string | null) => ({ getItem: () => value })
+const defaults = { theme: 'system', model: DEFAULT_MODEL, key: '' }
 
 test('defaults when nothing is saved', () => {
-  expect(loadSettings(store(null))).toEqual({ theme: 'system', model: DEFAULT_MODEL })
+  expect(loadSettings(store(null))).toEqual(defaults)
 })
 
 test('defaults for corrupt or invalid values', () => {
-  expect(loadSettings(store('{oops'))).toEqual({ theme: 'system', model: DEFAULT_MODEL })
-  expect(loadSettings(store('{"theme":"blue","model":"  "}'))).toEqual({ theme: 'system', model: DEFAULT_MODEL })
+  expect(loadSettings(store('{oops'))).toEqual(defaults)
+  expect(loadSettings(store('{"theme":"blue","model":"  ","key":5}'))).toEqual(defaults)
 })
 
 test('round-trips saved settings', () => {
   let saved: string | null = null
-  saveSettings({ theme: 'dark', model: 'gemini-x' }, { setItem: (_, v) => void (saved = v) })
-  expect(loadSettings(store(saved))).toEqual({ theme: 'dark', model: 'gemini-x' })
+  saveSettings({ theme: 'dark', model: 'gemini-x', key: 'abc' }, { setItem: (_, v) => void (saved = v) })
+  expect(loadSettings(store(saved))).toEqual({ theme: 'dark', model: 'gemini-x', key: 'abc' })
 })
