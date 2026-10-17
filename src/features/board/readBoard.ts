@@ -2,8 +2,8 @@ import { restoreElements } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { BinaryFiles } from '@excalidraw/excalidraw/types'
 import { cardText, swapURLs } from './board'
-import { getFile } from './fs'
-import { resolvePath } from './paths'
+import { getFile } from '@/lib/fs'
+import { resolvePath } from '@/lib/paths'
 
 export const readText = async (root: FileSystemDirectoryHandle, path: string) => (await (await getFile(root, path)).getFile()).text()
 

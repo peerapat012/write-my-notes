@@ -39,10 +39,10 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { cardText, toDisk } from './board'
 import { readBoard, readText } from './readBoard'
-import ConflictDialog from './ConflictDialog'
-import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from './fs'
-import NameInput from './NameInput'
-import { relativePath, resolvePath } from './paths'
+import ConflictDialog from '@/components/ConflictDialog'
+import { diskAction, dirty, flushes, getFile, saveAsset, writeFile } from '@/lib/fs'
+import NameInput from '@/components/NameInput'
+import { relativePath, resolvePath } from '@/lib/paths'
 
 type Props = { root: FileSystemDirectoryHandle; path: string; dark: boolean; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']

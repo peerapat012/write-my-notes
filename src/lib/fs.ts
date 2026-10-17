@@ -1,5 +1,5 @@
 import { movedPath, rewriteLinks } from './links'
-import { parseIcon, type Entry } from './tree'
+import { parseIcon, type Entry } from '@/features/sidebar/tree'
 
 // Chromium-only File System Access bits missing from lib.dom.
 declare global {

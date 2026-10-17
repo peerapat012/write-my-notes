@@ -1,4 +1,4 @@
-import { splitFrontMatter } from './frontmatter'
+import { splitFrontMatter } from '@/features/doc/frontmatter'
 
 /** Search index: page path -> its text. Boards map to '' so only their titles are searched (no board text, v2). */
 export type SearchIndex = Map<string, string>

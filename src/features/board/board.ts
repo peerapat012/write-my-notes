@@ -1,5 +1,5 @@
-import { splitFrontMatter } from './frontmatter'
-import { parseIcon } from './tree'
+import { splitFrontMatter } from '@/features/doc/frontmatter'
+import { parseIcon } from '@/features/sidebar/tree'
 
 type Files = Record<string, { dataURL: string }>
 
