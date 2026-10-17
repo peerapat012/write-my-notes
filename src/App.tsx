@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import BoardPage from './BoardPage'
 import DocPage from './DocPage'
 import { createPage, listEntries, loadRoot, saveRoot } from './fs'
 import { buildTree, type TreeNode } from './tree'
@@ -83,6 +84,8 @@ export default function App() {
       <main className="min-w-0 flex-1 overflow-auto">
         {root && page?.endsWith('.md') ? (
           <DocPage key={page} root={root} path={page} onIconChange={() => open(root)} />
+        ) : root && page?.endsWith('.excalidraw') ? (
+          <BoardPage key={page} root={root} path={page} />
         ) : (
           <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
         )}

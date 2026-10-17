@@ -4,3 +4,10 @@
 main .milkdown .ProseMirror {
   padding: 0;
 }
+
+/* Board: our own toolbars replace Excalidraw's chrome (desktop layout, then the narrow-window layout). */
+.board .excalidraw .layer-ui__wrapper,
+.board .excalidraw .App-top-bar,
+.board .excalidraw .App-bottom-bar {
+  display: none;
+}

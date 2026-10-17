@@ -42,7 +42,7 @@ export async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): 
   return out
 }
 
-/** Paths of open docs with edits not yet written to disk. Ticket 07 reads this. */
+/** Paths of open docs and boards with edits not yet written to disk. Ticket 07 reads this. */
 export const dirty = new Set<string>()
 
 export async function getFile(root: FileSystemDirectoryHandle, path: string) {
