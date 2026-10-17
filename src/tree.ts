@@ -1,4 +1,5 @@
-export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string }
+/** `text`: a doc's contents, read at scan time for the search index. */
+export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string; text?: string }
 
 export type TreeNode = {
   name: string

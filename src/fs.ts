@@ -35,7 +35,8 @@ export async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): 
       out.push({ path, kind: 'dir' }, ...(await listEntries(handle, path)))
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       // ponytail: reads every page on open; fine for personal-size folders, cache by lastModified if slow.
-      out.push({ path, kind: 'file', icon: parseIcon(name, await (await handle.getFile()).text()) })
+      const text = await (await handle.getFile()).text()
+      out.push({ path, kind: 'file', icon: parseIcon(name, text), text: name.endsWith('.md') ? text : undefined })
     } else {
       out.push({ path, kind: 'file' })
     }

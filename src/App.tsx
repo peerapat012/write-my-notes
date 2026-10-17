@@ -5,6 +5,8 @@ import DocPage from './DocPage'
 import { createPage, flushes, listEntries, loadRoot, movePage, saveRoot } from './fs'
 import { movedPath } from './links'
 import NameInput from './NameInput'
+import SearchPalette from './SearchPalette'
+import type { SearchIndex } from './search'
 import { buildTree, type Entry, type TreeNode } from './tree'
 
 const pageUrl = (path: string) => '/page/' + path.split('/').map(encodeURIComponent).join('/')
@@ -22,6 +24,11 @@ export default function App() {
   const [entries, setEntries] = useState<Entry[]>([])
   const tree = useMemo(() => buildTree(entries), [entries])
   const exists = useMemo(() => new Set(entries.map((e) => e.path)), [entries])
+  // Rebuilt on every scan (open, focus rescan, move) and doc save.
+  const index = useMemo<SearchIndex>(
+    () => new Map(entries.filter((e) => /\.(md|excalidraw)$/.test(e.path)).map((e) => [e.path, e.text ?? ''])),
+    [entries],
+  )
   const [page, setPage] = useState(currentPage)
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
 
@@ -132,6 +139,7 @@ export default function App() {
             go={go}
             onRename={(name) => rename(page, name)}
             onIconChange={() => open(root)}
+            onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
           <BoardPage key={page + rev} root={root} path={page} go={go} onRename={(name) => rename(page, name)} />
@@ -139,6 +147,7 @@ export default function App() {
           <div className="p-8 text-neutral-500">{page ?? 'No page selected'}</div>
         )}
       </main>
+      {root && <SearchPalette index={index} go={go} />}
     </div>
   )
 }

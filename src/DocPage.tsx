@@ -41,9 +41,10 @@ type Props = {
   go: (path: string) => void
   onRename: (name: string) => void
   onIconChange: () => void
+  onSave: (text: string) => void // keeps the search index current
 }
 
-export default function DocPage({ root, path, exists, go, onRename, onIconChange }: Props) {
+export default function DocPage({ root, path, exists, go, onRename, onIconChange, onSave }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(icon?: string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
@@ -51,6 +52,10 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
   const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
   const [broken, setBroken] = useState('') // CSS selector list of links whose target is missing
   const previews = useRef(new Map<string, string>()) // board preview blob URL -> board path
+  const onSaveRef = useRef(onSave) // read by the load effect, which must not re-run when App re-renders
+  useEffect(() => {
+    onSaveRef.current = onSave
+  })
 
   useEffect(() => {
     let crepe: Crepe | undefined
@@ -120,6 +125,7 @@ export default function DocPage({ root, path, exists, go, onRename, onIconChange
         if (newIcon) front = setIcon(front, newIcon)
         // Image blocks store their resize ratio as alt text; drop the default so plain `![](...)` stays plain.
         const content = front + crepe!.getMarkdown().replace(/!\[1\.00\]\(/g, '![](')
+        onSaveRef.current(content)
         writing = writing
           .then(() => writeFile(handle, content))
           .then(async () => {
