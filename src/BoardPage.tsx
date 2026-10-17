@@ -37,7 +37,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { swapURLs, toDisk } from './board'
-import { dirty, getFile, saveAsset, writeFile } from './fs'
+import ConflictDialog from './ConflictDialog'
+import { diskAction, dirty, getFile, saveAsset, writeFile } from './fs'
 import { relativePath, resolvePath } from './paths'
 
 type Props = { root: FileSystemDirectoryHandle; path: string }
@@ -77,7 +78,9 @@ const DEFAULTS: Partial<AppState> = {
 /** Loads one board file and autosaves it: 500 ms debounce, serialized writes, `dirty` while unsaved. */
 function boardFile(root: FileSystemDirectoryHandle, path: string) {
   let api: ExcalidrawImperativeAPI | undefined
-  let file: FileSystemFileHandle
+  let file: FileSystemFileHandle | undefined
+  let known = 0 // lastModified as of our last read or write
+  let checking = false
   let icon: string | undefined
   let links: Record<string, string> = {} // fileId -> relative `assets/` link already on disk
   let version: number | undefined
@@ -95,7 +98,8 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
         for (const [id, f] of Object.entries(files))
           if (!links[id] && f.dataURL.startsWith('data:'))
             links = { ...links, [id]: relativePath(path, await saveAsset(root, await (await fetch(f.dataURL)).blob())) }
-        await writeFile(file, toDisk(json, icon, links))
+        await writeFile(file!, toDisk(json, icon, links))
+        known = (await file!.getFile()).lastModified
       })
       .then(() => {
         if (!timer) dirty.delete(path)
@@ -107,7 +111,9 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
     setApi: (a: ExcalidrawImperativeAPI) => void (api = a),
     async load() {
       file = await getFile(root, path)
-      const data = JSON.parse(await (await file.getFile()).text())
+      const disk = await file.getFile()
+      known = disk.lastModified
+      const data = JSON.parse(await disk.text())
       icon = data.icon
       const urls: Record<string, string> = {}
       for (const [id, f] of Object.entries((data.files ?? {}) as BinaryFiles)) {
@@ -132,6 +138,23 @@ function boardFile(root: FileSystemDirectoryHandle, path: string) {
       timer = setTimeout(save, 500)
     },
     flush: () => void (timer && save()),
+    /** Window focus: reloads, or asks, if the file changed on disk since we last read or wrote it. */
+    async check(ask: () => Promise<boolean>, reload: () => void) {
+      if (!file || checking) return
+      checking = true
+      await writing
+      const action = diskAction(known, (await file.getFile()).lastModified, dirty.has(path))
+      if (action !== 'ignore') {
+        clearTimeout(timer) // no autosave over the disk version while we decide
+        timer = undefined
+        if (action === 'ask' && !(await ask())) save()
+        else {
+          dirty.delete(path)
+          reload()
+        }
+      }
+      checking = false
+    },
   }
 }
 
@@ -143,7 +166,13 @@ const dataURL = (blob: Blob) =>
     r.readAsDataURL(blob)
   })
 
-export default function BoardPage({ root, path }: Props) {
+// Keyed by `rev` so a reload from disk remounts Excalidraw with fresh initialData.
+export default function BoardPage(props: Props) {
+  const [rev, setRev] = useState(0)
+  return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
+}
+
+function Board({ root, path, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [board] = useState(() => boardFile(root, path))
   const [icon, setIcon] = useState<string>()
@@ -155,7 +184,14 @@ export default function BoardPage({ root, path }: Props) {
     return { ...data, appState: { ...data.appState, ...DEFAULTS } }
   })
 
+  const [conflict, setConflict] = useState<(loadDisk: boolean) => void>()
+
   useEffect(() => board.flush, [board]) // flush pending edits when leaving the page
+  useEffect(() => {
+    const onFocus = () => board.check(() => new Promise((r) => setConflict(() => r)), reload)
+    addEventListener('focus', onFocus)
+    return () => removeEventListener('focus', onFocus)
+  }, [board, reload])
 
   function onChange(elements: readonly ExcalidrawElement[], app: AppState) {
     const z = app.zoom.value
@@ -344,6 +380,15 @@ export default function BoardPage({ root, path }: Props) {
           </div>
         )}
       </div>
+      {conflict && (
+        <ConflictDialog
+          name={title}
+          onAnswer={(loadDisk) => {
+            setConflict(undefined)
+            conflict(loadDisk)
+          }}
+        />
+      )}
     </div>
   )
 }

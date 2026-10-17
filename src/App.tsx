@@ -31,6 +31,14 @@ export default function App() {
     return () => removeEventListener('popstate', onPop)
   }, [])
 
+  // Rescan on focus to catch pages added or removed on disk (e.g. by `git pull`).
+  useEffect(() => {
+    if (!root) return
+    const onFocus = () => listEntries(root).then((entries) => setTree(buildTree(entries)))
+    addEventListener('focus', onFocus)
+    return () => removeEventListener('focus', onFocus)
+  }, [root])
+
   async function pickFolder() {
     if (!('showDirectoryPicker' in window)) {
       return alert('This browser cannot open folders. Use desktop Chrome or Edge on http://localhost.')

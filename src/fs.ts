@@ -45,6 +45,10 @@ export async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): 
 /** Paths of open docs and boards with edits not yet written to disk. Ticket 07 reads this. */
 export const dirty = new Set<string>()
 
+/** On window focus: what to do when an open file's `lastModified` differs from the one we last read or wrote. */
+export const diskAction = (known: number, onDisk: number, isDirty: boolean) =>
+  onDisk === known ? 'ignore' : isDirty ? 'ask' : 'reload'
+
 export async function getFile(root: FileSystemDirectoryHandle, path: string) {
   const parts = path.split('/')
   let dir = root
