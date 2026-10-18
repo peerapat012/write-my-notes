@@ -19,6 +19,11 @@ Body text at 15px. A paragraph with a [link](https://example.com) and \`code\`.
 
 > A plain quote.
 
+| Name | Role |
+|---|---|
+| Ann | Dev |
+| Bo | PM |
+
 \`\`\`ts
 const x = 1
 \`\`\`

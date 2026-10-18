@@ -668,10 +668,10 @@ function CalendarView({ t, col, rows, update, readOnly, open }: { t: Table; col:
           <ChevronRight size={16} />
         </button>
       </div>
-      <div role="grid" aria-label={title} className="overflow-hidden rounded-lg border border-neutral-200">
-        <div role="row" className="grid grid-cols-7 bg-neutral-50">
+      <div role="grid" aria-label={title} className="border-t border-neutral-200">
+        <div role="row" className="grid grid-cols-7">
           {WEEKDAYS.map((d) => (
-            <div key={d} role="columnheader" className="h-8 border-b border-neutral-200 px-2 text-xs leading-8 font-medium text-neutral-700">
+            <div key={d} role="columnheader" className="h-8 border-b border-neutral-200 px-2 text-xs leading-8 text-neutral-500">
               {d}
             </div>
           ))}
