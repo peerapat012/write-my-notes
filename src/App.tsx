@@ -1,4 +1,6 @@
 import Toasts from '@/components/Toast'
+import PagePeek from '@/features/peek/PagePeek'
+import { nav, setPages, titleOf } from '@/lib/pages'
 import { toast, toastError } from '@/lib/toast'
 import { CalendarDays, FileText, FolderOpen, LayoutList, LayoutTemplate, Link, Moon, PanelLeftOpen, Presentation, Printer, Search, Settings as SettingsIcon, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -87,17 +89,26 @@ export default function App() {
   /** What the AI chat reads of a page: a doc's markdown, or a board's texts. */
   const pageText = (path: string) => (path.endsWith('.md') ? docTexts.get(path) : entries.find((e) => e.path === path)?.boardTexts?.map((t) => t.text).join(' · '))
   // Pages that link to or embed the open doc.
-  const linkedFrom = useMemo(
+  const linksTo = (target: string | null | undefined) =>
+    target?.endsWith('.md')
+      ? backlinks(target, entries).map((path) => ({
+          path,
+          title: path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, ''),
+          icon: icons.get(path)?.icon,
+          iconColor: icons.get(path)?.iconColor,
+        }))
+      : []
+  const linkedFrom = useMemo(() => linksTo(page), [page, entries, icons]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [peek, setPeek] = useState<string>() // a page open in the peek modal
+  // Widgets in the editor (page chips, cards, the data table) read the pages from this store.
+  useEffect(
     () =>
-      page?.endsWith('.md')
-        ? backlinks(page, entries).map((path) => ({
-            path,
-            title: path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, ''),
-            icon: icons.get(path)?.icon,
-            iconColor: icons.get(path)?.iconColor,
-          }))
-        : [],
-    [page, entries, icons],
+      setPages(
+        entries
+          .filter((e) => e.kind === 'file' && /\.(md|excalidraw)$/.test(e.path) && !/^\.(trash|templates)(\/|$)/.test(e.path))
+          .map((e) => ({ path: e.path, title: titleOf(e.path), type: e.path.endsWith('.md') ? 'doc' : 'board', icon: e.icon, iconColor: e.iconColor, mtime: e.mtime, text: e.text })),
+      ),
+    [entries],
   )
   const favSet = useMemo(() => new Set(favs), [favs])
   // Starred pages that still exist, in the order added.
@@ -277,10 +288,17 @@ export default function App() {
 
   function go(path: string, elementId?: string) {
     setPreview(undefined)
+    setPeek(undefined)
     setZoomTo(elementId ? { id: elementId } : undefined)
     history.pushState(null, '', pageUrl(path))
     setPage(path)
   }
+
+  // Page links in editor widgets open through these: Ctrl/Cmd+click full screen, a plain click in the peek.
+  useEffect(() => {
+    nav.go = go
+    nav.peek = (path) => (path === page ? go(path) : setPeek(path))
+  })
 
   async function move(from: string, to: string) {
     if (!root || from === to) return
@@ -292,6 +310,7 @@ export default function App() {
       return open(root)
     }
     updateFavs((f) => moveFavorites(f, from, to))
+    setPeek((p) => p && movedPath(p, from, to))
     await open(root)
     const next = page && movedPath(page, from, to)
     if (next !== page) history.replaceState(null, '', pageUrl(next!))
@@ -308,6 +327,7 @@ export default function App() {
     try {
       await Promise.all([...flushes].map((f) => f())) // so no pending autosave writes a deleted file back
       for (const p of [...dirty]) if (inside(p)) dirty.delete(p)
+      if (peek && inside(peek)) setPeek(undefined)
       if (page && inside(page)) {
         const dir = parentOf(node.path)
         const parent = dir && [dir + '.md', dir + '.excalidraw'].find((p) => exists.has(p))
@@ -698,6 +718,33 @@ export default function App() {
               setHistoryRev((r) => r + 1)
               open(root)
             }}
+          />
+        )}
+        {peek && root && (
+          <PagePeek
+            vault={root}
+            path={peek}
+            dark={dark}
+            onClose={() => setPeek(undefined)}
+            onOpen={() => go(peek)}
+            doc={
+              <DocPage
+                key={peek + rev}
+                vault={root}
+                dark={dark}
+                path={peek}
+                exists={exists}
+                go={go}
+                onRename={(name) => rename(peek, name)}
+                onIconChange={() => open(root)}
+                onSave={(text) => setEntries((es) => es.map((e) => (e.path === peek ? { ...e, text, mtime: Date.now(), links: linkTargets(e.path, text) } : e)))}
+                onHeadings={() => {}}
+                model={settings.model}
+                openSettings={() => setShowSettings(true)}
+                focusTitle={false}
+                linkedFrom={linksTo(peek)}
+              />
+            }
           />
         )}
         <Toasts />

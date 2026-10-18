@@ -9,6 +9,9 @@ import { readBoard } from '@/features/board/readBoard'
 import { splitFrontMatter } from '@/features/doc/frontmatter'
 import type { Vault } from '@/lib/fs'
 import { resolvePath } from '@/lib/paths'
+import { openPage, pageAt, pageTarget } from '@/lib/pages'
+import { datatableView } from '@/features/doc/datatableView'
+import { cardView } from '@/features/doc/linkView'
 import { versionDate } from './versionDate'
 
 export type Viewing = { page: string; hash: string; date: string; content: string }
@@ -63,15 +66,25 @@ export function DocVersion({ vault, path, text, className = 'mx-auto max-w-3xl p
         },
       },
     })
+    crepe.editor.use(datatableView(path)).use(cardView(path))
     crepe.setReadonly(true)
     crepe.create()
     return () => void crepe.destroy()
   }, [vault, path, text])
-  return <div className={className} ref={mount} />
+  // A page link opens the peek view (Ctrl/Cmd+click: full screen).
+  function onClick(e: React.MouseEvent) {
+    const href = (e.target as HTMLElement).closest('a')?.getAttribute('href')
+    const target = href ? pageTarget(path, href) : undefined
+    if (target && pageAt(target)) {
+      e.preventDefault()
+      openPage(target, e)
+    }
+  }
+  return <div className={className} ref={mount} onClick={onClick} />
 }
 
 /** Excalidraw in view mode. */
-function BoardVersion({ vault, path, text, dark }: { vault: Vault; path: string; text: string; dark: boolean }) {
+export function BoardVersion({ vault, path, text, dark }: { vault: Vault; path: string; text: string; dark: boolean }) {
   const [data, setData] = useState<ExcalidrawInitialDataState>()
   const [error, setError] = useState('')
   useEffect(() => {

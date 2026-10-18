@@ -97,7 +97,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
 }
 
 /** Replaces the text of the code block that ends at the widget's position. */
-function setText(view: EditorView, widgetPos: number, text: string) {
+export function setText(view: EditorView, widgetPos: number, text: string) {
   const node = view.state.doc.resolve(widgetPos).nodeBefore
   if (!node) return
   const from = widgetPos - node.nodeSize + 1

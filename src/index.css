@@ -339,9 +339,33 @@ main .milkdown .mermaid-error {
   --icon-pink: #ec86b9;
 }
 
-/* A ```tasks code block is shown through its table widget (src/features/doc/tasksView.ts); the source stays in the document. */
-.tasks-source {
+/* A ```tasks or ```datatable code block is shown through its widget (tasksView.ts, datatableView.ts), and a card
+   link paragraph through its card (linkView.ts); the source stays in the document. */
+.tasks-source,
+.card-source {
   display: none;
+}
+/* The page link toolbar replaces Crepe's link tooltip while it shows. */
+.page-link-hover .milkdown-link-preview {
+  display: none !important;
+}
+/* Page links in the body: a page icon before the title. */
+main .milkdown .ProseMirror a:is([href$=".md"], [href$=".excalidraw"]) {
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 0 2px;
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 3px;
+    vertical-align: -0.15em;
+    background: var(--color-neutral-500);
+    mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>') center / contain no-repeat;
+  }
+  &:hover { background: var(--color-neutral-100); }
 }
 
 /* Print / Save as PDF: only the doc. App.tsx drops the dark theme for the print preview. */

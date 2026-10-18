@@ -7,6 +7,8 @@ import { panel, shortcut } from './ui'
 export type MenuItem = {
   label: string
   icon?: LucideIcon
+  /** In place of `icon` (e.g. a page icon). */
+  leading?: ReactNode
   shortcut?: string
   checked?: boolean
   disabled?: boolean
@@ -146,7 +148,7 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
               const i = n++
               return (
                 <MenuRow
-                  key={item.label}
+                  key={item.label + i}
                   id={`${id}-${i}`}
                   role={search ? 'option' : item.checked === undefined ? 'menuitem' : 'menuitemradio'}
                   aria-selected={search ? i === active : undefined}
@@ -156,6 +158,7 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
                   aria-expanded={item.children ? sub?.item === item : undefined}
                   active={i === active && !item.disabled}
                   icon={item.icon}
+                  leading={item.leading}
                   label={item.label}
                   className={item.disabled ? 'cursor-default opacity-40' : item.danger ? 'text-danger' : ''}
                   hint={

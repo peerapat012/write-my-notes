@@ -25,11 +25,18 @@ import { fromTemplate } from '@/features/templates/templates'
 import { headings, type Heading } from './outline'
 import { NEW_TASKS } from './tasks'
 import { tasksView } from './tasksView'
+import { datatableView } from './datatableView'
+import { NEW_TABLE } from './datatable'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
 import { skeleton } from '@/components/ui'
 import { setSaving } from '@/lib/saveStatus'
+import { openPage, pageTarget } from '@/lib/pages'
+import PagePicker from '@/components/PagePicker'
+import LinkToolbar from './LinkToolbar'
+import { cardView, insertPageLink, mentionPlugin, removeLink, setCard } from './linkView'
+import type { EditorView } from '@milkdown/kit/prose/view'
 import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { readBoard } from '@/features/board/readBoard'
 import { parseIcon, parseIconColor } from '@/features/sidebar/tree'
@@ -61,6 +68,9 @@ const MERMAID_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height=
 
 /** Slash menu icon (lucide "list-checks"). */
 const TASKS_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>'
+
+/** Slash menu icon (lucide "table-2"). */
+const TABLE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>'
 
 /** Slash menu and toolbar icon (lucide "sparkles"). */
 const AI_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>'
@@ -111,6 +121,9 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const previews = useRef(new Map<string, string>()) // board preview blob URL -> board path
   const editor = useRef<Crepe>(undefined)
   const [blockMenu, setBlockMenu] = useState<{ at: DOMRect; footer: string }>() // drag handle click menu
+  const [mention, setMention] = useState<{ pos: number; at: DOMRect }>() // `@` page picker
+  const [hover, setHover] = useState<{ at: DOMRect; target: string; pos: number }>() // page link toolbar
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [ai, setAi] = useState<{ at: DOMRect; from: number; to: number; selection: string; block?: boolean }>() // `/ai` popover
   const onSaveRef = useRef(onSave) // read by the load effect, which must not re-run when App re-renders
   const onHeadingsRef = useRef(onHeadings)
@@ -189,6 +202,16 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
                   const view = ctx.get(editorViewCtx)
                   view.dispatch(view.state.tr.insertText(NEW_TASKS))
                 },
+              }).addItem('datatable', {
+                label: 'Data table',
+                icon: TABLE_ICON,
+                onRun: (ctx: Ctx) => {
+                  const commands = ctx.get(commandsCtx)
+                  commands.call(clearTextInCurrentBlockCommand.key)
+                  commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'datatable' } })
+                  const view = ctx.get(editorViewCtx)
+                  view.dispatch(view.state.tr.insertText(NEW_TABLE))
+                },
               }).addItem('mermaid', {
                 label: 'Mermaid',
                 icon: MERMAID_ICON,
@@ -212,7 +235,11 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           },
         },
       })
-      crepe.editor.use(tasksView)
+      crepe.editor
+        .use(tasksView)
+        .use(datatableView(path))
+        .use(cardView(path))
+        .use(mentionPlugin((pos, at) => setMention({ pos, at })))
       // Match common hand-written markdown so saves don't churn git diffs.
       crepe.editor.config((ctx) => ctx.update(remarkStringifyOptionsCtx, (o) => ({ ...o, bullet: '-' as const, rule: '-' as const })))
       crepe.on((l) =>
@@ -285,6 +312,29 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
     return () => observer.disconnect()
   }, [path, exists])
 
+  // Crepe's own link tooltip stays hidden while the page link toolbar shows.
+  useEffect(() => {
+    document.documentElement.classList.toggle('page-link-hover', !!hover)
+  }, [hover])
+
+  /** Shows the page link toolbar under a link to a doc or board. */
+  function onMouseOver(e: React.MouseEvent) {
+    const a = (e.target as HTMLElement).closest('.ProseMirror a[href]')
+    const target = a && pageTarget(path, a.getAttribute('href')!)
+    if (!a || !target || !exists.has(target) || !editor.current) return
+    clearTimeout(hoverTimer.current)
+    const view = editor.current.editor.action((ctx) => ctx.get(editorViewCtx))
+    setHover({ at: a.getBoundingClientRect(), target, pos: view.posAtDOM(a.firstChild ?? a, 0) + (a.firstChild ? 1 : 0) })
+  }
+  const hideSoon = () => {
+    clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setHover(undefined), 250)
+  }
+  const withView = (fn: (view: EditorView) => void) => {
+    setHover(undefined)
+    editor.current?.editor.action((ctx) => fn(ctx.get(editorViewCtx)))
+  }
+
   function openLink(e: React.MouseEvent) {
     // Crepe's drag handle (the second handle button) selects its block on mousedown; a click opens the block menu.
     const handle = (e.target as Element).closest('.milkdown-block-handle .operation-item:last-child')
@@ -301,7 +351,8 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
     const target = href ? linkTarget(path, href) : undefined
     if (target && exists.has(target)) {
       e.preventDefault()
-      go(target)
+      if (/\.(md|excalidraw)$/.test(target)) openPage(target, e) // peek; Ctrl/Cmd+click: full screen
+      else go(target)
     }
   }
 
@@ -435,9 +486,11 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       <div
         ref={mount}
         onClick={openLink}
+        onMouseOver={onMouseOver}
+        onMouseOut={(e) => (e.target as HTMLElement).closest('a[href]') && hideSoon()}
         onKeyDownCapture={(e) => {
           // Ctrl+D duplicates the block at the cursor; only here, so Chrome's bookmark shortcut never fires.
-          if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && editor.current) {
+          if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && editor.current && !(e.target as Element).closest('.datatable')) {
             e.preventDefault()
             duplicate(editor.current)
           }
@@ -509,6 +562,39 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
             },
           ]}
         />
+      )}
+      {mention && (
+        <PagePicker
+          anchor={mention.at}
+          exclude={[path]}
+          onClose={() => {
+            setMention(undefined)
+            editor.current?.editor.action((ctx) => ctx.get(editorViewCtx).focus())
+          }}
+          onPick={(target) =>
+            editor.current?.editor.action((ctx) => {
+              const view = ctx.get(editorViewCtx)
+              const at = mention.pos
+              if (view.state.doc.textBetween(at, Math.min(at + 1, view.state.doc.content.size)) === '@') insertPageLink(view, at, at + 1, path, target)
+            })
+          }
+        />
+      )}
+      {hover && (
+        <div
+          className="fixed z-20 transition-opacity duration-150 starting:opacity-0 print:hidden"
+          style={{ top: hover.at.bottom + 4, left: hover.at.left }}
+          onMouseEnter={() => clearTimeout(hoverTimer.current)}
+          onMouseLeave={hideSoon}
+        >
+          <LinkToolbar
+            path={hover.target}
+            card={false}
+            onText={() => {}}
+            onCard={() => withView((view) => setCard(view, hover.pos, true))}
+            onRemove={() => withView((view) => removeLink(view, hover.pos))}
+          />
+        </div>
       )}
       {ai && <DocAi at={ai.at} model={model} selection={ai.selection} onAccept={closeAi} onClose={() => closeAi()} openSettings={openSettings} />}
       {broken && <style>{`${broken} { color: var(--color-danger); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
