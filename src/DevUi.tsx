@@ -2,6 +2,7 @@ import { ArrowDownUp, Copy, FileText, FolderOpen, Heading1, List, Pencil, Plus, 
 import { useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import Menu, { MenuRow } from '@/components/Menu'
+import DevDoc from './DevDoc'
 import DevEditor from './DevEditor'
 import LinkToolbar from '@/features/doc/LinkToolbar'
 import TableBlock from '@/features/doc/TableBlock'
@@ -14,7 +15,7 @@ export default function DevUi() {
     <div className="grid min-h-screen grid-cols-2 text-sm">
       <Sheet />
       <div className="dark">
-        <Sheet />
+        <Sheet dark />
       </div>
     </div>
   )
@@ -22,10 +23,13 @@ export default function DevUi() {
 
 const noop = () => {}
 
-function Sheet() {
+function Sheet({ dark }: { dark?: boolean }) {
   const [table, setTable] = useState(SAMPLE_TABLE)
   return (
     <div className="h-full space-y-8 bg-white p-8 text-neutral-900">
+      <Section title="Page head">
+        <DevDoc dark={!!dark} />
+      </Section>
       <Section title="Editor">
         <DevEditor />
       </Section>

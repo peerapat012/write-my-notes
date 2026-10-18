@@ -8,7 +8,7 @@ import { getMarkdown, replaceAll, replaceRange } from '@milkdown/kit/utils'
 import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
-import { CalendarClock, ChevronRight, Code, Copy, FileText, Presentation, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Clock, Code, Copy, FileText, Presentation, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
 import IconPicker from '@/components/IconPicker'
@@ -114,6 +114,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const [templates, setTemplates] = useState(false) // template picker, opened from the Start row
   const [empty, setEmpty] = useState(false) // no text yet: the Add icon link stays visible
   const [info, setInfo] = useState(() => localStorage.getItem(INFO_KEY) === 'open')
+  const [updated, setUpdated] = useState<number>() // file's last modified time
   const [props, setProps] = useState<ReturnType<typeof getProps>>({ created: undefined, tags: [] })
   const [ready, setReady] = useState(false) // editor created; shows the loading state until then
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
@@ -170,6 +171,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       const text = await vault.read(path)
       if (cancelled) return
       known = mtime
+      setUpdated(mtime)
       let { front, body } = splitFrontMatter(text)
       setIconState(parseIcon(path, text))
       setIconColor(parseIconColor(path, text))
@@ -274,6 +276,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           .then(() => vault.write(path, content))
           .then(async () => {
             known = await vault.stat(path)
+            setUpdated(known)
             if (!timer) {
               dirty.delete(path)
               setSaving(false)
@@ -448,6 +451,11 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
             {props.created && (
               <Row icon={CalendarClock} name="Created">
                 {new Date(props.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              </Row>
+            )}
+            {updated !== undefined && (
+              <Row icon={Clock} name="Updated">
+                {new Date(updated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
               </Row>
             )}
             <Row icon={Tag} name="Tags">
