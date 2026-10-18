@@ -6,11 +6,17 @@ export function splitFrontMatter(text: string) {
   return { front, body: text.slice(front.length) }
 }
 
-/** Returns `front` with its `icon:` set, adding the line or the whole block if missing. */
-export function setIcon(front: string, icon: string) {
-  if (!front) return `---\nicon: ${icon}\n---\n`
-  if (/^icon:.*$/m.test(front)) return front.replace(/^icon:.*$/m, `icon: ${icon}`)
-  return front.replace(/^---\r?\n/, (open) => `${open}icon: ${icon}\n`)
+/**
+ * Returns `front` with `icon:` (and `iconColor:` for a Lucide icon) set, in the place of the old ones or after the opening `---`.
+ * No icon removes both keys, and the block itself if nothing else is left. Other keys stay untouched.
+ */
+export function setIcon(front: string, icon?: string, color?: string) {
+  const lines = icon ? `icon: ${icon}\n` + (color ? `iconColor: ${color}\n` : '') : ''
+  if (!front) return lines ? `---\n${lines}---\n` : ''
+  let placed = false
+  let out = front.replace(/^(icon|iconColor):.*(\r?\n|$)/gm, () => (placed ? '' : ((placed = true), lines)))
+  if (!placed) out = out.replace(/^---\r?\n/, (open) => open + lines)
+  return /^---\r?\n---(\r?\n|$)$/.test(out) ? '' : out
 }
 
 const TAGS = /^tags:.*(?:\r?\n[ \t]*-[ \t].*)*(?:\r?\n|$)/m

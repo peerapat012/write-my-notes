@@ -10,12 +10,12 @@ export function swapURLs<T extends Files>(files: T, urls: Record<string, string>
 
 /**
  * Final `.excalidraw` text: image data URLs swapped for their `assets/` links (by fileId)
- * and the app's top-level `"icon"` added (Excalidraw drops unknown fields).
+ * and the app's top-level `"icon"` and `"iconColor"` added (Excalidraw drops unknown fields).
  */
-export function toDisk(json: string, icon?: string, links: Record<string, string> = {}) {
+export function toDisk(json: string, icon?: string, links: Record<string, string> = {}, iconColor?: string) {
   const scene = JSON.parse(json)
   if (scene.files) scene.files = swapURLs(scene.files, links)
-  return JSON.stringify(icon ? { ...scene, icon } : scene, null, 2)
+  return JSON.stringify(icon ? { ...scene, icon, ...(iconColor && { iconColor }) } : scene, null, 2)
 }
 
 /** Doc card text: icon + title, then the doc's first `n` non-empty lines without markdown syntax. No markdown = broken link. */
@@ -35,7 +35,8 @@ export function cardText(path: string, markdown?: string, n = 3) {
     )
     .filter(Boolean)
     .slice(0, n)
-  return [`${parseIcon(path, markdown) ?? '📄'} ${title}`, ...lines].join('\n')
+  const icon = parseIcon(path, markdown)
+  return [`${icon && !icon.startsWith('lucide:') ? icon : '📄'} ${title}`, ...lines].join('\n')
 }
 
 type El = { id: string; isDeleted?: boolean; containerId?: string | null }

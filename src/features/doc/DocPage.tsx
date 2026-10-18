@@ -8,9 +8,11 @@ import { getMarkdown, replaceRange } from '@milkdown/kit/utils'
 import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
-import { CalendarClock, Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
+import IconPicker from '@/components/IconPicker'
+import PageIcon from '@/components/PageIcon'
 import Menu, { type MenuGroup } from '@/components/Menu'
 import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import DocAi from './DocAi'
@@ -22,11 +24,13 @@ import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
 import { skeleton } from '@/components/ui'
-import { relativePath, resolvePath } from '@/lib/paths'
+import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { readBoard } from '@/features/board/readBoard'
-import { parseIcon } from '@/features/sidebar/tree'
+import { parseIcon, parseIconColor } from '@/features/sidebar/tree'
 
 /** Shown in place of a board embed whose `.excalidraw` file is missing. */
+const INFO_KEY = 'write-my-notes:info' // the Info box is open or closed for every page at once
+
 const brokenBoard = (name: string) =>
   'data:image/svg+xml,' +
   encodeURIComponent(
@@ -76,12 +80,17 @@ type Props = {
   onHeadings: (headings: Heading[]) => void // feeds the outline panel
   model: string // Gemini model for `/ai`
   openSettings: () => void
+  focusTitle: boolean // a page just created: the title takes focus
 }
 
-export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, onHeadings, model, openSettings }: Props) {
+export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, onHeadings, model, openSettings, focusTitle }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
+  const [iconColor, setIconColor] = useState<string>()
+  const [picker, setPicker] = useState<DOMRect>() // icon picker popover
+  const [empty, setEmpty] = useState(false) // no text yet: the Add icon link stays visible
+  const [info, setInfo] = useState(() => localStorage.getItem(INFO_KEY) === 'open')
   const [props, setProps] = useState<ReturnType<typeof getProps>>({ created: undefined, tags: [] })
   const [ready, setReady] = useState(false) // editor created; shows the loading state until then
   const [rev, setRev] = useState(0) // bumped to reload the file from disk
@@ -136,6 +145,8 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       known = mtime
       let { front, body } = splitFrontMatter(text)
       setIconState(parseIcon(path, text))
+      setIconColor(parseIconColor(path, text))
+      setEmpty(!body.trim())
       setProps(getProps(front))
 
       crepe = new Crepe({
@@ -184,6 +195,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       crepe.on((l) =>
         l.markdownUpdated((_, markdown) => {
           onHeadingsRef.current(headings(markdown))
+          setEmpty(!markdown.trim())
           dirty.add(path)
           clearTimeout(timer)
           timer = setTimeout(() => save.current(), 500)
@@ -289,11 +301,18 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
     })
   }
 
-  function changeIcon(value: string) {
-    const next = [...new Intl.Segmenter().segment(value.trim())].at(-1)?.segment
-    if (!next) return
+  /** Picker choice: an emoji, a Lucide icon with its color, or nothing to remove the icon. */
+  function changeIcon(next?: string, color?: string) {
     setIconState(next)
-    save.current((f) => setIcon(f, next)).then(onIconChange)
+    setIconColor(next?.startsWith('lucide:') ? color : undefined)
+    save.current((f) => setIcon(f, next, next?.startsWith('lucide:') ? color : undefined)).then(onIconChange)
+  }
+
+  function toggleInfo() {
+    setInfo((open) => {
+      localStorage.setItem(INFO_KEY, open ? 'closed' : 'open')
+      return !open
+    })
   }
 
   function changeTags(tags: string[]) {
@@ -302,57 +321,82 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   }
 
   const title = path.slice(path.lastIndexOf('/') + 1, -'.md'.length)
+  const placeholderTitle = UNTITLED.test(title) // a page not named yet shows the "Title" placeholder
+  const openPicker = (e: React.MouseEvent<HTMLElement>) => setPicker(e.currentTarget.getBoundingClientRect())
   return (
     <div className="mx-auto max-w-3xl px-16 pt-16 pb-32">
-      <div className="group relative mb-3 size-14">
-        <input
-          aria-label="Page icon (Win + . for emoji)"
-          title="Type or paste an emoji (Win + .)"
-          className="size-full rounded-md bg-transparent text-center text-[40px] leading-none transition-colors duration-150 hover:bg-neutral-100"
-          value={icon ?? ''}
-          onChange={(e) => changeIcon(e.target.value)}
-        />
-        {!icon && <SmilePlus className="pointer-events-none absolute inset-0 m-auto text-neutral-400" size={28} strokeWidth={1.5} />}
-      </div>
-      <h1 className="mb-6 text-[40px] leading-tight font-bold tracking-[-0.02em]">
-        <NameInput
-          value={title}
-          onDone={(name) => name !== title && onRename(name)}
-          className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-400"
-        />
-      </h1>
-      <div className="mb-6 space-y-1 text-sm">
-        {props.created && (
-          <Row icon={CalendarClock} name="Created">
-            {new Date(props.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-          </Row>
+      <div className="group/head">
+        {icon ? (
+          <button
+            aria-label="Change icon"
+            title="Change icon"
+            className="mb-3 grid size-14 place-items-center rounded-md transition-colors duration-150 hover:bg-neutral-100"
+            onClick={openPicker}
+          >
+            <PageIcon icon={icon} color={iconColor} fallback={SmilePlus} size={40} />
+          </button>
+        ) : (
+          <button
+            className={`mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm text-neutral-500 transition-[opacity,background-color] duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:opacity-100 ${empty ? '' : 'opacity-0 group-hover/head:opacity-100'}`}
+            onClick={openPicker}
+          >
+            <SmilePlus size={16} strokeWidth={1.75} /> Add icon
+          </button>
         )}
-        <Row icon={Tag} name="Tags">
-          <div className="flex flex-wrap items-center gap-1">
-            {props.tags.map((t) => (
-              <span key={t} className="inline-flex items-center gap-1 rounded bg-neutral-100 py-0.5 pr-1 pl-2">
-                {t}
-                <button aria-label={`Remove tag ${t}`} className="rounded text-neutral-400 hover:text-neutral-700" onClick={() => changeTags(props.tags.filter((x) => x !== t))}>
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            <input
-              aria-label="Add tag"
-              placeholder="Add tag"
-              className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-400"
-              onKeyDown={(e) => {
-                const input = e.currentTarget
-                const tag = input.value.replace(/[,[\]"']/g, '').trim()
-                if (e.key === 'Enter' && tag) {
-                  if (!props.tags.includes(tag)) changeTags([...props.tags, tag])
-                  input.value = ''
-                } else if (e.key === 'Backspace' && !input.value && props.tags.length) changeTags(props.tags.slice(0, -1))
-              }}
-            />
-          </div>
-        </Row>
+        <h1 className="mb-4 text-[40px] leading-tight font-bold tracking-[-0.02em]">
+          <NameInput
+            value={placeholderTitle ? '' : title}
+            placeholder="Title"
+            autoFocus={focusTitle}
+            onDone={(name) => name && name !== title && onRename(name)}
+            className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-400"
+          />
+        </h1>
       </div>
+      <div className="mb-6 text-sm">
+        <button
+          aria-expanded={info}
+          className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
+          onClick={toggleInfo}
+        >
+          <ChevronRight size={14} className={`transition-transform duration-150 ${info ? 'rotate-90' : ''}`} /> Info
+        </button>
+        {info && (
+          <div className="mt-1 space-y-1 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+            {props.created && (
+              <Row icon={CalendarClock} name="Created">
+                {new Date(props.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              </Row>
+            )}
+            <Row icon={Tag} name="Tags">
+              <div className="flex flex-wrap items-center gap-1">
+                {props.tags.map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded bg-neutral-100 py-0.5 pr-1 pl-2">
+                    {t}
+                    <button aria-label={`Remove tag ${t}`} className="rounded text-neutral-400 hover:text-neutral-700" onClick={() => changeTags(props.tags.filter((x) => x !== t))}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  aria-label="Add tag"
+                  placeholder="Add tag"
+                  className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-400"
+                  onKeyDown={(e) => {
+                    const input = e.currentTarget
+                    const tag = input.value.replace(/[,[\]"']/g, '').trim()
+                    if (e.key === 'Enter' && tag) {
+                      if (!props.tags.includes(tag)) changeTags([...props.tags, tag])
+                      input.value = ''
+                    } else if (e.key === 'Backspace' && !input.value && props.tags.length) changeTags(props.tags.slice(0, -1))
+                  }}
+                />
+              </div>
+            </Row>
+          </div>
+        )}
+      </div>
+      {picker && <IconPicker anchor={picker} icon={icon} color={iconColor} onChange={changeIcon} onClose={() => setPicker(undefined)} />}
       {!ready && (
         <div aria-label="Loading page" className="space-y-3 pt-1">
           {[92, 100, 84, 0, 96, 70].map((w, i) =>

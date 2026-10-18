@@ -37,3 +37,8 @@ test('exportElements: selection with bound text, else every live element', () =>
   expect(exportElements(els, { a: true }).map((e) => e.id)).toEqual(['a', 'at'])
   expect(exportElements(els, {}).map((e) => e.id)).toEqual(['a', 'at', 'b'])
 })
+
+test('adds iconColor next to a Lucide icon', () => {
+  expect(JSON.parse(toDisk(scene, 'lucide:rocket', {}, 'blue'))).toMatchObject({ icon: 'lucide:rocket', iconColor: 'blue' })
+  expect(JSON.parse(toDisk(scene, '🐳'))).not.toHaveProperty('iconColor')
+})

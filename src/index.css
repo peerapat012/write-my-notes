@@ -224,3 +224,25 @@ main .milkdown .mermaid-error {
   font-size: 0.8125rem;
   white-space: pre-wrap;
 }
+
+/* Lucide page icon colors (the palette in src/lib/icons.ts), by name, for each theme. */
+:root {
+  --icon-gray: #6b6862;
+  --icon-red: #c4372f;
+  --icon-orange: #c2610f;
+  --icon-yellow: #a07a08;
+  --icon-green: #2f8a4f;
+  --icon-blue: #2f6bad;
+  --icon-purple: #7a4fc2;
+  --icon-pink: #c23b82;
+}
+.dark {
+  --icon-gray: #9c9a95;
+  --icon-red: #f0857a;
+  --icon-orange: #eba062;
+  --icon-yellow: #dcb94a;
+  --icon-green: #6fc28a;
+  --icon-blue: #6aa4e6;
+  --icon-purple: #b49af0;
+  --icon-pink: #ec86b9;
+}

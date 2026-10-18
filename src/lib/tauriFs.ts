@@ -3,7 +3,7 @@ import { join } from '@tauri-apps/api/path'
 import { open } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { fileSearchTexts } from '@/features/search/boardText'
-import { parseIcon, type Entry } from '@/features/sidebar/tree'
+import { parseIcon, parseIconColor, type Entry } from '@/features/sidebar/tree'
 import { originalPath, restorePath, topLevel, trashedPages, trashPaths, TRASH } from './trash'
 import { assetName, moveWithLinks, newPageContent, segments, splitPath, type Vault } from './fs'
 
@@ -23,7 +23,7 @@ async function listEntries(root: string, dir = ''): Promise<Entry[]> {
       out.push({ path, kind: 'dir' }, ...(await listEntries(root, path)))
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       const text = await readTextFile(await abs(root, path))
-      out.push({ path, kind: 'file', icon: parseIcon(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
+      out.push({ path, kind: 'file', icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }

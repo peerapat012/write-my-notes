@@ -130,21 +130,21 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
   )
 }
 
-type RowProps = { active: boolean; icon?: LucideIcon; label: ReactNode; hint?: ReactNode; detail?: ReactNode } & Omit<
+type RowProps = { active: boolean; icon?: LucideIcon; leading?: ReactNode; label: ReactNode; hint?: ReactNode; detail?: ReactNode } & Omit<
   React.HTMLAttributes<HTMLDivElement>,
   'children'
 >
 
 /** One menu row: icon, label, right-aligned hint, optional muted second line. Shared with the search palette. */
-export function MenuRow({ active, icon: Icon, label, hint, detail, className = '', ...rest }: RowProps) {
+export function MenuRow({ active, icon: Icon, leading, label, hint, detail, className = '', ...rest }: RowProps) {
   return (
     <div {...rest} className={`cursor-pointer rounded-md px-2 py-1.5 text-sm ${active ? 'bg-neutral-100' : ''} ${className}`}>
       <div className="flex min-w-0 items-center gap-2.5">
-        {Icon && <Icon size={16} className={`shrink-0 ${active ? 'text-neutral-700' : 'text-neutral-500'}`} />}
+        {leading ?? (Icon && <Icon size={16} className={`shrink-0 ${active ? 'text-neutral-700' : 'text-neutral-500'}`} />)}
         <span className="truncate">{label}</span>
         {hint}
       </div>
-      {detail && <div className={`truncate text-xs text-neutral-500 ${Icon ? 'pl-[26px]' : ''}`}>{detail}</div>}
+      {detail && <div className={`truncate text-xs text-neutral-500 ${Icon || leading ? 'pl-[26px]' : ''}`}>{detail}</div>}
     </div>
   )
 }

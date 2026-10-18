@@ -29,3 +29,16 @@ test('setTags touches only the tags entry', () => {
   expect(setTags('---\ntags:\n  - a\n  - b\nx: 1\n---\n', ['a'])).toBe('---\ntags: [a]\nx: 1\n---\n')
   expect(setTags('---\nicon: 🐳\ntags: [a]\n---\n', [])).toBe('---\nicon: 🐳\n---\n')
 })
+
+test('setIcon writes lucide icons with a color and keeps other keys', () => {
+  expect(setIcon('---\ncreated: 1\n---\n', 'lucide:rocket', 'blue')).toBe('---\nicon: lucide:rocket\niconColor: blue\ncreated: 1\n---\n')
+  expect(setIcon('---\nicon: 🐳\ntags: [a]\n---\n', 'lucide:rocket', 'blue')).toBe('---\nicon: lucide:rocket\niconColor: blue\ntags: [a]\n---\n')
+  expect(setIcon('---\nicon: lucide:rocket\niconColor: blue\n---\n', 'lucide:star', 'red')).toBe('---\nicon: lucide:star\niconColor: red\n---\n')
+  expect(setIcon('---\nicon: lucide:rocket\niconColor: blue\n---\n', '🐳')).toBe('---\nicon: 🐳\n---\n') // emoji has no color
+})
+
+test('setIcon with no icon removes both keys', () => {
+  expect(setIcon('---\ncreated: 1\nicon: lucide:rocket\niconColor: blue\ntags: [a]\n---\n', undefined)).toBe('---\ncreated: 1\ntags: [a]\n---\n')
+  expect(setIcon('---\nicon: 🐳\n---\n', undefined)).toBe('')
+  expect(setIcon('', undefined)).toBe('')
+})

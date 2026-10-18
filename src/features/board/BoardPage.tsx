@@ -49,11 +49,13 @@ import { readBoard } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
 import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import NameInput from '@/components/NameInput'
+import IconPicker from '@/components/IconPicker'
+import PageIcon from '@/components/PageIcon'
 import { panel } from '@/components/ui'
-import { relativePath, resolvePath } from '@/lib/paths'
+import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { searchTexts, type BoardText } from '@/features/search/boardText'
 
-type Props = { vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { focusTitle: boolean; onIconChange: () => void; vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -95,6 +97,7 @@ function boardFile(vault: Vault, path: string, onSave: (texts: BoardText[]) => v
   let known = 0 // lastModified as of our last read or write
   let checking = false
   let icon: string | undefined
+  let iconColor: string | undefined
   let links: Record<string, string> = {} // fileId -> relative `assets/` link already on disk
   let version: number | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -112,7 +115,7 @@ function boardFile(vault: Vault, path: string, onSave: (texts: BoardText[]) => v
         for (const [id, f] of Object.entries(files))
           if (!links[id] && f.dataURL.startsWith('data:'))
             links = { ...links, [id]: relativePath(path, await vault.saveAsset(await (await fetch(f.dataURL)).blob())) }
-        await vault.write(path, toDisk(json, icon, links))
+        await vault.write(path, toDisk(json, icon, links, iconColor))
         known = await vault.stat(path)
       })
       .then(() => {
@@ -123,12 +126,19 @@ function boardFile(vault: Vault, path: string, onSave: (texts: BoardText[]) => v
   return {
     api: () => api,
     setApi: (a: ExcalidrawImperativeAPI) => void (api = a),
+    /** Changes the page icon and writes the board right away. */
+    setIcon(next?: string, color?: string) {
+      icon = next
+      iconColor = color
+      save()
+    },
     async load() {
       known = await vault.stat(path)
       const board = await readBoard(vault, path, await vault.read(path))
       loaded = true
       links = board.links
       icon = board.data.icon
+      iconColor = board.data.iconColor
       return board.data
     },
     changed(elements: readonly ExcalidrawElement[]) {
@@ -177,7 +187,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const onSaveRef = useRef(onSave) // read by the autosave, which outlives App re-renders
   useEffect(() => {
@@ -185,6 +195,8 @@ function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSumma
   })
   const [board] = useState(() => boardFile(vault, path, (t) => onSaveRef.current(t)))
   const [icon, setIcon] = useState<string>()
+  const [iconColor, setIconColor] = useState<string>()
+  const [picker, setPicker] = useState<DOMRect>()
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
@@ -193,6 +205,7 @@ function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSumma
   const [initialData] = useState(async (): Promise<ExcalidrawInitialDataState> => {
     const data = await board.load()
     setIcon(data.icon)
+    setIconColor(data.iconColor)
     return { ...data, appState: { ...data.appState, ...DEFAULTS } }
   })
 
@@ -372,6 +385,14 @@ function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSumma
 
   const btn =
     'grid h-7 min-w-7 place-items-center rounded-md px-1.5 text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900 disabled:pointer-events-none disabled:opacity-40'
+  function changeIcon(next?: string, color?: string) {
+    const c = next?.startsWith('lucide:') ? color : undefined
+    setIcon(next)
+    setIconColor(c)
+    board.setIcon(next, c)
+    onIconChange()
+  }
+
   const textBtn = `${btn} text-[13px] font-medium text-neutral-700`
   const title = path.slice(path.lastIndexOf('/') + 1, -'.excalidraw'.length)
   return (
@@ -381,10 +402,19 @@ function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSumma
           <ArrowLeft size={16} />
         </button>
         <h1 className="mr-auto flex min-w-0 items-center gap-1 px-1 font-medium">
-          <span className="grid size-6 shrink-0 place-items-center text-base leading-none text-neutral-500">{icon ?? <Presentation size={16} />}</span>
+          <button
+            className="grid size-7 shrink-0 place-items-center rounded-md transition-colors duration-150 hover:bg-neutral-100"
+            title={icon ? 'Change icon' : 'Add icon'}
+            aria-label={icon ? 'Change icon' : 'Add icon'}
+            onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}
+          >
+            <PageIcon icon={icon} color={iconColor} fallback={Presentation} size={18} />
+          </button>
           <NameInput
-            value={title}
-            onDone={(name) => name !== title && onRename(name)}
+            value={UNTITLED.test(title) ? '' : title}
+            placeholder="Title"
+            autoFocus={focusTitle}
+            onDone={(name) => name && name !== title && onRename(name)}
             className="h-7 min-w-0 rounded-md bg-transparent px-1.5 transition-colors duration-150 hover:bg-neutral-100"
           />
         </h1>
@@ -416,6 +446,7 @@ function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSumma
           </span>
         </button>
       </header>
+      {picker && (<IconPicker anchor={picker} icon={icon} color={iconColor} onChange={changeIcon} onClose={() => setPicker(undefined)} />)}
       <div
         ref={box}
         className="relative flex-1"

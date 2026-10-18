@@ -17,6 +17,7 @@ import {
 import { useState, type ReactNode } from 'react'
 import { MenuButton, type MenuGroup } from '@/components/Menu'
 import NameInput from '@/components/NameInput'
+import PageIcon from '@/components/PageIcon'
 import { iconButton, skeleton } from '@/components/ui'
 import type { Vault } from '@/lib/fs'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
@@ -197,7 +198,7 @@ function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'n
           <span className="size-5 shrink-0" />
         )}
         <span className="grid size-5 shrink-0 place-items-center text-[15px] leading-none text-neutral-500">
-          {isPage && node.icon ? node.icon : <Icon size={16} />}
+          <PageIcon icon={isPage ? node.icon : undefined} color={node.iconColor} fallback={Icon} />
         </span>
         {editing ? (
           <NameInput

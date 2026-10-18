@@ -1,6 +1,6 @@
 import { fileSearchTexts } from '@/features/search/boardText'
 import { movedPath, rewriteLinks } from './links'
-import { parseIcon, type Entry } from '@/features/sidebar/tree'
+import { parseIcon, parseIconColor, type Entry } from '@/features/sidebar/tree'
 import { restorePath, topLevel, trashedPages, trashPaths } from './trash'
 
 // Chromium-only File System Access bits missing from lib.dom.
@@ -88,7 +88,7 @@ async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): Promise
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       // ponytail: reads every page on open; fine for personal-size folders, cache by lastModified if slow.
       const text = await (await handle.getFile()).text()
-      out.push({ path, kind: 'file', icon: parseIcon(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
+      out.push({ path, kind: 'file', icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }

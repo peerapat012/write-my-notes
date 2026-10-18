@@ -4,15 +4,15 @@ import Dialog from '@/components/Dialog'
 import TitleBar from '@/components/TitleBar'
 import RightPanel from '@/components/RightPanel'
 import EmptyState from '@/components/EmptyState'
-import { INVALID } from '@/components/NameInput'
-import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
+
+import { dangerButton, ghostButton, iconButton, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
 import OutlineList from '@/features/doc/OutlineList'
 import type { Heading } from '@/features/doc/outline'
 import { dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
-import { ext, join, pageUrl, parentOf } from '@/lib/paths'
+import { ext, join, pageUrl, parentOf, untitledName } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
 import type { BoardText } from '@/features/search/boardText'
 import type { SearchIndex } from '@/features/search/search'
@@ -52,6 +52,7 @@ export default function App() {
     () => new Map(entries.filter((e) => /\.(md|excalidraw)$/.test(e.path)).map((e) => [e.path, e.boardTexts ?? e.text ?? ''])),
     [entries],
   )
+  const icons = useMemo(() => new Map(entries.map((e) => [e.path, { icon: e.icon, iconColor: e.iconColor }])), [entries])
   const [page, setPage] = useState(currentPage)
   const [zoomTo, setZoomTo] = useState<{ id: string }>() // board element a search hit asked to zoom to
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
@@ -60,7 +61,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false)
   const [deleting, setDeleting] = useState<TreeNode>() // delete confirmation dialog
   const deletingPages = deleting && deletion(deleting).childPages
-  const [naming, setNaming] = useState<{ dir: string; type: 'doc' | 'board' }>() // new-page name dialog
+  const [fresh, setFresh] = useState<string>() // a page just created: its title takes focus
   const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
   const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
@@ -238,14 +239,12 @@ export default function App() {
 
   const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
 
-  // Asks for the name in a dialog (below), then creates the page and opens it.
-  const create = (dir: string, type: 'doc' | 'board') => setNaming({ dir, type })
-
-  async function createNamed(dir: string, type: 'doc' | 'board', name: string) {
-    setNaming(undefined)
-    if (!root || !name) return
-    const path = await root.createPage(dir, name, type)
+  /** Creates `Untitled` (or `Untitled 2`...) in `dir`, opens it and focuses its title. */
+  async function create(dir: string, type: 'doc' | 'board') {
+    if (!root) return
+    const path = await root.createPage(dir, untitledName(exists, dir, type === 'doc' ? '.md' : '.excalidraw'), type)
     await open(root)
+    setFresh(path)
     go(path)
   }
 
@@ -325,9 +324,10 @@ export default function App() {
               onHeadings={setOutline}
               model={settings.model}
               openSettings={() => setShowSettings(true)}
+              focusTitle={fresh === page}
             />
           ) : root && page?.endsWith('.excalidraw') ? (
-            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
           ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
             <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
           ) : root && page === '.trash' ? (
@@ -371,38 +371,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        {showSearch && root && <SearchPalette index={index} go={go} onClose={() => setShowSearch(false)} />}
-        {naming && (
-          <Dialog aria-label={`New ${naming.type}`} onClose={() => setNaming(undefined)}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                createNamed(naming.dir, naming.type, String(new FormData(e.currentTarget).get('name')).trim())
-              }}
-            >
-              <h2 className="font-semibold">New {naming.type}</h2>
-              <input
-                name="name"
-                autoFocus
-                required
-                aria-label="Page name"
-                placeholder={naming.type === 'doc' ? 'Meeting notes' : 'Architecture sketch'}
-                onInput={(e) => {
-                  const bad = INVALID.test(e.currentTarget.value.trim())
-                  e.currentTarget.setCustomValidity(bad ? 'A name can’t start with a dot or contain \\ / : * ? " < > |' : '')
-                }}
-                className={`${input} mt-3`}
-              />
-              {naming.dir && <p className="mt-1.5 truncate text-xs text-neutral-500">Inside {naming.dir}</p>}
-              <div className="mt-5 flex justify-end gap-2">
-                <button type="button" className={ghostButton} onClick={() => setNaming(undefined)}>
-                  Cancel
-                </button>
-                <button className={primaryButton}>Create</button>
-              </div>
-            </form>
-          </Dialog>
-        )}
+        {showSearch && root && <SearchPalette index={index} icons={icons} go={go} onClose={() => setShowSearch(false)} />}
         {deleting && (
           <Dialog aria-label={`Move ${deleting.name} to Trash`} onClose={() => setDeleting(undefined)}>
             <h2 className="font-semibold">Move “{deleting.name}” to Trash?</h2>

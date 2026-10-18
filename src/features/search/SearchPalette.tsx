@@ -2,12 +2,13 @@ import { FileText, Presentation, Search } from 'lucide-react'
 import { useState } from 'react'
 import Dialog from '@/components/Dialog'
 import { MenuRow } from '@/components/Menu'
+import PageIcon from '@/components/PageIcon'
 import { search, type Hit, type SearchIndex } from './search'
 
-type Props = { index: SearchIndex; go: (path: string, elementId?: string) => void; onClose: () => void }
+type Props = { index: SearchIndex; icons: Map<string, { icon?: string; iconColor?: string }>; go: (path: string, elementId?: string) => void; onClose: () => void }
 
 /** Ctrl+K palette, open while mounted: type to search page titles, doc text and board text, arrows + Enter (or click) to open. */
-export default function SearchPalette({ index, go, onClose }: Props) {
+export default function SearchPalette({ index, icons, go, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const hits = search(index, query)
@@ -55,7 +56,7 @@ export default function SearchPalette({ index, go, onClose }: Props) {
               role="option"
               aria-selected={i === selected}
               active={i === selected}
-              icon={hit.path.endsWith('.md') ? FileText : Presentation}
+              leading={<PageIcon icon={icons.get(hit.path)?.icon} color={icons.get(hit.path)?.iconColor} fallback={hit.path.endsWith('.md') ? FileText : Presentation} />}
               label={hit.title}
               hint={<span className="ml-auto max-w-[45%] shrink-0 truncate pl-3 text-xs text-neutral-500">{hit.path}</span>}
               detail={hit.snippet}

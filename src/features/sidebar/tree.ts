@@ -1,13 +1,14 @@
 import type { BoardText } from '@/features/search/boardText'
 
 /** `text`: a doc's contents, `boardTexts`: a board's texts; both read at scan time for the search index. */
-export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string; text?: string; boardTexts?: BoardText[] }
+export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string; iconColor?: string; text?: string; boardTexts?: BoardText[] }
 
 export type TreeNode = {
   name: string
   path: string
   type: 'doc' | 'board' | 'folder'
-  icon?: string
+  icon?: string // an emoji, or `lucide:<name>`
+  iconColor?: string
   children: TreeNode[]
 }
 
@@ -40,6 +41,7 @@ export function buildTree(entries: Entry[]): TreeNode[] {
         path: e.path,
         type: page.type,
         icon: e.icon,
+        iconColor: e.iconColor,
         children: dirs.has(childDir) ? level(childDir) : [],
       })
     }
@@ -52,20 +54,25 @@ export function buildTree(entries: Entry[]): TreeNode[] {
   return level('')
 }
 
-export function parseIcon(fileName: string, text: string): string | undefined {
+/** `icon` or `iconColor` of a page: front matter key of a doc, top-level field of a board. */
+function pageField(fileName: string, text: string, key: 'icon' | 'iconColor'): string | undefined {
   if (fileName.endsWith('.md')) {
     const front = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1]
-    return front?.match(/^icon:\s*["']?(.+?)["']?\s*$/m)?.[1]
+    return front?.match(new RegExp(String.raw`^${key}:\s*["']?(.+?)["']?\s*$`, 'm'))?.[1]
   }
   if (fileName.endsWith('.excalidraw')) {
     try {
-      const icon = JSON.parse(text).icon
-      return typeof icon === 'string' ? icon : undefined
+      const value = JSON.parse(text)[key]
+      return typeof value === 'string' ? value : undefined
     } catch {
       return undefined
     }
   }
 }
+
+/** The page icon: an emoji, or `lucide:<name>`. */
+export const parseIcon = (fileName: string, text: string) => pageField(fileName, text, 'icon')
+export const parseIconColor = (fileName: string, text: string) => pageField(fileName, text, 'iconColor')
 
 /** What deleting `node` removes: its file (or folder), a page's same-name child folder, and how many pages go with it. */
 export function deletion(node: TreeNode) {

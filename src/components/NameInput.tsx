@@ -1,15 +1,16 @@
 export const INVALID = /^\.|[\\/:*?"<>|]/ // hidden (dot) names and characters Windows can't store
 
-type Props = { value: string; onDone: (name: string) => void; className?: string; autoFocus?: boolean }
+type Props = { value: string; onDone: (name: string) => void; className?: string; autoFocus?: boolean; placeholder?: string }
 
 /** Page-name input: Enter or blur reports the trimmed name (`value` if invalid), Esc reports `value`. */
-export default function NameInput({ value, onDone, className, autoFocus }: Props) {
+export default function NameInput({ value, onDone, className, autoFocus, placeholder }: Props) {
   return (
     <input
       aria-label="Page name"
       className={className}
       defaultValue={value}
       autoFocus={autoFocus}
+      placeholder={placeholder}
       onFocus={(e) => autoFocus && e.currentTarget.select()}
       onKeyDown={(e) => {
         if (e.key === 'Escape') e.currentTarget.value = value
