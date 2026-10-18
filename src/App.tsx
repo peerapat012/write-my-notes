@@ -252,6 +252,8 @@ export default function App() {
             onRename={(name) => rename(page, name)}
             onIconChange={() => open(root)}
             onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
+            model={settings.model}
+            openSettings={() => setShowSettings(true)}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
           <BoardPage key={page + rev} vault={root} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />

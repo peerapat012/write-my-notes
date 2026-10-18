@@ -2,7 +2,9 @@ import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import { exportToSvg } from '@excalidraw/excalidraw'
-import { commandsCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import { commandsCtx, editorViewCtx, parserCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core'
+import type { Ctx } from '@milkdown/kit/ctx'
+import { getMarkdown, replaceRange } from '@milkdown/kit/utils'
 import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
@@ -11,6 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
 import Menu, { type MenuGroup } from '@/components/Menu'
 import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
+import DocAi from './DocAi'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { mermaidPreview } from './mermaid'
@@ -45,6 +48,9 @@ async function boardPreview(vault: Vault, path: string, previews: Map<string, st
 /** Slash menu icon (lucide "workflow"); Crepe wants SVG markup, not a component. */
 const MERMAID_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>'
 
+/** Slash menu and toolbar icon (lucide "sparkles"). */
+const AI_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>'
+
 const TURN_INTO: [BlockKind, string, MenuGroup['items'][number]['icon']][] = [
   ['text', 'Text', Pilcrow],
   ['h1', 'Heading 1', Heading1],
@@ -66,9 +72,11 @@ type Props = {
   onRename: (name: string) => void
   onIconChange: () => void
   onSave: (text: string) => void // keeps the search index current
+  model: string // Gemini model for `/ai`
+  openSettings: () => void
 }
 
-export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave }: Props) {
+export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, model, openSettings }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
@@ -80,6 +88,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const previews = useRef(new Map<string, string>()) // board preview blob URL -> board path
   const editor = useRef<Crepe>(undefined)
   const [blockMenu, setBlockMenu] = useState<{ at: DOMRect; footer: string }>() // drag handle click menu
+  const [ai, setAi] = useState<{ at: DOMRect; from: number; to: number; selection: string; block?: boolean }>() // `/ai` popover
   const onSaveRef = useRef(onSave) // read by the load effect, which must not re-run when App re-renders
   useEffect(() => {
     onSaveRef.current = onSave
@@ -131,12 +140,22 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
         featureConfigs: {
           // Token classes (tok-keyword, ...) coloured from theme variables in index.css, so code follows the theme.
           [CrepeFeature.CodeMirror]: { theme: syntaxHighlighting(classHighlighter), renderPreview: mermaidPreview(dark) },
+          [CrepeFeature.Toolbar]: {
+            buildToolbar: (b) => b.getGroup('function').addItem('ai', { icon: AI_ICON, label: 'AI', active: () => false, onRun: (ctx) => openAi(ctx) }),
+          },
           [CrepeFeature.BlockEdit]: {
             buildMenu: (b) =>
-              b.getGroup('advanced').addItem('mermaid', {
+              b.getGroup('advanced').addItem('ai', {
+                label: 'AI',
+                icon: AI_ICON,
+                onRun: (ctx) => {
+                  ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key)
+                  openAi(ctx)
+                },
+              }).addItem('mermaid', {
                 label: 'Mermaid',
                 icon: MERMAID_ICON,
-                onRun: (ctx) => {
+                onRun: (ctx: Ctx) => {
                   const commands = ctx.get(commandsCtx)
                   commands.call(clearTextInCurrentBlockCommand.key)
                   commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'mermaid' } })
@@ -238,6 +257,29 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
     }
   }
 
+  /** Opens the AI popover on the current selection, or at the cursor when nothing is selected. */
+  function openAi(ctx: Ctx) {
+    const view = ctx.get(editorViewCtx)
+    const { from, to, $from, empty } = view.state.selection
+    const c = view.coordsAtPos(from)
+    const at = new DOMRect(c.left, c.top, 0, c.bottom - c.top)
+    // On an empty line, replace the whole block, so a list or heading answer isn't merged into the paragraph.
+    if (empty && !$from.parent.content.size && $from.depth) setAi({ at, from: $from.before(), to: $from.after(), selection: '', block: true })
+    else setAi({ at, from, to, selection: empty ? '' : getMarkdown({ from, to })(ctx) })
+  }
+
+  function closeAi(markdown?: string) {
+    const range = ai!
+    setAi(undefined)
+    editor.current?.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      // A whole empty block takes the parsed blocks as they are; a selection or cursor gets an open slice that merges in.
+      if (markdown !== undefined && range.block) view.dispatch(view.state.tr.replaceWith(range.from, range.to, ctx.get(parserCtx)(markdown).content))
+      else if (markdown !== undefined) replaceRange(markdown, range)(ctx)
+      view.focus()
+    })
+  }
+
   function changeIcon(value: string) {
     const next = [...new Intl.Segmenter().segment(value.trim())].at(-1)?.segment
     if (!next) return
@@ -337,6 +379,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           ]}
         />
       )}
+      {ai && <DocAi at={ai.at} model={model} selection={ai.selection} onAccept={closeAi} onClose={() => closeAi()} openSettings={openSettings} />}
       {broken && <style>{`${broken} { color: var(--color-danger); text-decoration: line-through; } :is(${broken})::after { content: " (broken link)"; font-size: 0.75em; }`}</style>}
       {conflict && (
         <ConflictDialog
