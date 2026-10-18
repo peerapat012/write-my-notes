@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { autoMessage, parseStatus } from './git'
+import { autoMessage, parseStatus, parseVersions } from './git'
 
 test('modified, added, deleted and untracked files', () => {
   const out = ' M notes/a.md\nA  b.md\n D gone.md\n?? new page.md\n?? assets/\n'
@@ -31,4 +31,17 @@ test('clean tree and blank lines give nothing', () => {
 test('auto message counts changed files', () => {
   expect(autoMessage(2)).toBe('Edited 2 pages')
   expect(autoMessage(1)).toBe('Edited 1 page')
+})
+
+test('versions carry the file path at each commit, across a rename', () => {
+  const out =
+    '\x1eccc\x1fAnn\x1f2026-10-03T10:00:00+07:00\x1fAfter rename\n\nM\tnew.md\n' +
+    '\x1ebbb\x1fAnn\x1f2026-10-02T10:00:00+07:00\x1fRename\n\nR100\told.md\tnew.md\n' +
+    '\x1eaaa\x1fBob\x1f2026-10-01T10:00:00+07:00\x1fFirst\n\nA\t"\\340\\270\\201.md"\n'
+  expect(parseVersions(out, 'new.md')).toEqual([
+    { hash: 'ccc', author: 'Ann', date: '2026-10-03T10:00:00+07:00', message: 'After rename', path: 'new.md' },
+    { hash: 'bbb', author: 'Ann', date: '2026-10-02T10:00:00+07:00', message: 'Rename', path: 'new.md' },
+    { hash: 'aaa', author: 'Bob', date: '2026-10-01T10:00:00+07:00', message: 'First', path: 'ก.md' },
+  ])
+  expect(parseVersions('', 'a.md')).toEqual([])
 })

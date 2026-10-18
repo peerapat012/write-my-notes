@@ -23,7 +23,7 @@ struct GitOutput {
 }
 
 /// `--format` strings for `log`. `src/lib/git.ts` sends the same ones.
-const FILE_LOG_FORMAT: &str = "--format=%H%x1f%an%x1f%aI%x1f%s";
+const FILE_LOG_FORMAT: &str = "--format=%x1e%H%x1f%an%x1f%aI%x1f%s";
 const GRAPH_LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s";
 
 fn digits(s: &str) -> bool {
@@ -54,7 +54,7 @@ fn allowed(args: &[String]) -> bool {
         | ["remote", "get-url", "origin"]
         | ["push", "-u", "origin", "HEAD"] => true,
         // One file's history, then the whole graph; a page of `count` entries after skipping `skip`.
-        ["log", "--follow", FILE_LOG_FORMAT, "-n", count, "--skip", skip, "--", path] => digits(count) && digits(skip) && plain(path),
+        ["log", "--follow", "--name-status", FILE_LOG_FORMAT, "-n", count, "--skip", skip, "--", path] => digits(count) && digits(skip) && plain(path),
         ["log", "--all", GRAPH_LOG_FORMAT, "-n", count, "--skip", skip] => digits(count) && digits(skip),
         // A file as of a commit, and the files one commit changed.
         ["show", spec] => spec.split_once(':').is_some_and(|(hash, path)| hex(hash) && plain(path)),
@@ -123,12 +123,12 @@ mod tests {
         assert!(!ok(&[]));
     }
 
-    const FILE: &str = "--format=%H%x1f%an%x1f%aI%x1f%s";
+    const FILE: &str = "--format=%x1e%H%x1f%an%x1f%aI%x1f%s";
     const GRAPH: &str = "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s";
 
     #[test]
     fn accepts_the_v3_shapes() {
-        assert!(ok(&["log", "--follow", FILE, "-n", "50", "--skip", "0", "--", "a/b c.md"]));
+        assert!(ok(&["log", "--follow", "--name-status", FILE, "-n", "50", "--skip", "0", "--", "a/b c.md"]));
         assert!(ok(&["log", "--all", GRAPH, "-n", "100", "--skip", "200"]));
         assert!(ok(&["show", "abcdef0:notes/a.md"]));
         assert!(ok(&["show", "--name-status", "--format=", "ABCDEF0123"]));
@@ -141,12 +141,13 @@ mod tests {
 
     #[test]
     fn rejects_flags_in_value_positions_and_bad_values() {
+        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "0", "--", "a.md"])); // --name-status is part of the shape
         // other formats, non-numbers, flag-like paths, extra arguments
-        assert!(!ok(&["log", "--follow", "--format=%H", "-n", "5", "--skip", "0", "--", "a.md"]));
-        assert!(!ok(&["log", "--follow", FILE, "-n", "--output=x", "--skip", "0", "--", "a.md"]));
-        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "-1", "--", "a.md"]));
-        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "0", "--", "--all"]));
-        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "0", "--", "a.md", "b.md"]));
+        assert!(!ok(&["log", "--follow", "--name-status", "--format=%H", "-n", "5", "--skip", "0", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", "--name-status", FILE, "-n", "--output=x", "--skip", "0", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", "--name-status", FILE, "-n", "5", "--skip", "-1", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", "--name-status", FILE, "-n", "5", "--skip", "0", "--", "--all"]));
+        assert!(!ok(&["log", "--follow", "--name-status", FILE, "-n", "5", "--skip", "0", "--", "a.md", "b.md"]));
         assert!(!ok(&["log", "--all", GRAPH, "-n", "5", "--skip", "0", "--", "a.md"]));
         assert!(!ok(&["log", "--all", GRAPH, "-n", "5"]));
         assert!(!ok(&["show", "--output=x"]));

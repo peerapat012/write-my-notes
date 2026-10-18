@@ -19,6 +19,9 @@ import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
 import GitFooter from '@/features/git/GitFooter'
+import HistoryTab from '@/features/history/HistoryTab'
+import VersionView, { type Viewing } from '@/features/history/VersionView'
+import { showFile, type Version } from '@/lib/git'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
@@ -60,6 +63,9 @@ export default function App() {
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
   const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
   const [outline, setOutline] = useState<Heading[]>([])
+  const [viewing, setViewing] = useState<Viewing>() // an old version shown read-only in place of the page
+  const [historyRev, setHistoryRev] = useState(0) // bumped after versions are saved or pulled
+  const view = viewing?.page === page ? viewing : undefined
   const systemDark = useSyncExternalStore(subscribeDark, () => darkQuery.matches)
   const dark = settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
   useLayoutEffect(() => void document.documentElement.classList.toggle('dark', dark), [dark]) // before paint: no light flash
@@ -81,6 +87,27 @@ export default function App() {
       localStorage.setItem(PANEL_KEY, shown ? 'hidden' : 'shown')
       return !shown
     })
+  }
+
+  async function openVersion(v: Version) {
+    try {
+      setViewing({ page: page!, hash: v.hash, date: v.date, content: await showFile(v.hash, v.path) })
+    } catch (e) {
+      alert(`Could not open this version: ${e}`)
+    }
+  }
+
+  /** Writes the old content like any edit, then reloads the page from disk. */
+  async function restoreVersion() {
+    if (!root || !view) return
+    try {
+      await root.write(view.page, view.content)
+    } catch (e) {
+      return alert(`Could not restore: ${e}`)
+    }
+    setViewing(undefined)
+    await open(root)
+    setRev((r) => r + 1)
   }
 
   async function open(dir: Vault) {
@@ -198,6 +225,14 @@ export default function App() {
     setRev((r) => r + 1)
   }
 
+  // Outline for docs; History (git) on the desktop for docs and boards. No tabs: no panel and no toggle.
+  const tabs = [
+    ...(page?.endsWith('.md') && !view ? [{ id: 'outline', label: 'Outline', content: <OutlineList headings={outline} /> }] : []),
+    ...(isTauri && page && /\.(md|excalidraw)$/.test(page)
+      ? [{ id: 'history', label: 'History', content: <HistoryTab path={page} refreshKey={historyRev} viewing={view?.hash} onOpen={openVersion} /> }]
+      : []),
+  ]
+
   const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
 
   // Asks for the name in a dialog (below), then creates the page and opens it.
@@ -255,7 +290,7 @@ export default function App() {
             openSettings={() => setShowSettings(true)}
             openSearch={() => setShowSearch(true)}
             hide={toggleSidebar}
-            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
+            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} /> : undefined}
           />
         ) : (
           <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
@@ -271,7 +306,9 @@ export default function App() {
         )}
         <div className="relative flex min-w-0 flex-1">
         <main className="min-w-0 flex-1 overflow-auto">
-          {root && page?.endsWith('.md') ? (
+          {root && view ? (
+            <VersionView vault={root} dark={dark} view={view} onRestore={restoreVersion} onBack={() => setViewing(undefined)} />
+          ) : root && page?.endsWith('.md') ? (
             <DocPage
               key={page + rev}
               vault={root}
@@ -320,9 +357,9 @@ export default function App() {
             </EmptyState>
           )}
         </main>
-        {root && page?.endsWith('.md') &&
+        {root && tabs.length > 0 &&
           (panel ? (
-            <RightPanel tabs={[{ id: 'outline', label: 'Outline', content: <OutlineList headings={outline} /> }]} onClose={togglePanel} />
+            <RightPanel tabs={tabs} onClose={togglePanel} />
           ) : (
             <button className={`${iconButton} absolute top-2 right-4 z-10`} title="Show panel" aria-label="Show panel" onClick={togglePanel}>
               <PanelRightOpen size={16} />

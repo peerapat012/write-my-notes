@@ -14,12 +14,14 @@ type Props = {
   flush: () => Promise<unknown>
   /** After a successful pull: rescan the folder and reload the open page. */
   onPulled: () => Promise<unknown>
+  /** After a version is saved or pulled: the page history changed. */
+  onSaved: () => void
 }
 
 type Notice = { title: string; detail: string; terminal: boolean }
 
 /** Desktop sidebar row: how many files changed in the notes folder's git repo, with Commit, Pull and Push. */
-export default function GitFooter({ mode, refreshKey, flush, onPulled }: Props) {
+export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved }: Props) {
   const [state, setState] = useState<GitState>()
   const [committing, setCommitting] = useState(false)
   const [busy, setBusy] = useState<'pull' | 'push'>()
@@ -49,7 +51,10 @@ export default function GitFooter({ mode, refreshKey, flush, onPulled }: Props) 
             : { title: COMMIT_FIRST, detail: 'Pull needs a clean working tree. Commit your changes first.', terminal: false },
         )
       else if (failure) setNotice({ title: simple ? `Could not ${what === 'pull' ? 'get' : 'send'} updates` : `Git ${what} failed`, detail: failure, terminal: true })
-      else if (what === 'pull') await onPulled()
+      else if (what === 'pull') {
+        await onPulled()
+        onSaved()
+      }
     } finally {
       setBusy(undefined)
       refresh()
@@ -90,6 +95,7 @@ export default function GitFooter({ mode, refreshKey, flush, onPulled }: Props) 
           simple={simple}
           count={n}
           flush={flush}
+          onSaved={onSaved}
           onClose={() => {
             setCommitting(false)
             refresh()
@@ -120,7 +126,7 @@ export default function GitFooter({ mode, refreshKey, flush, onPulled }: Props) 
   )
 }
 
-function CommitDialog({ simple, count, flush, onClose }: { simple: boolean; count: number; flush: () => Promise<unknown>; onClose: () => void }) {
+function CommitDialog({ simple, count, flush, onSaved, onClose }: { simple: boolean; count: number; flush: () => Promise<unknown>; onSaved: () => void; onClose: () => void }) {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -133,7 +139,10 @@ function CommitDialog({ simple, count, flush, onClose }: { simple: boolean; coun
     const failure = await commitAll(message.trim() || autoMessage(count)).catch(String)
     setBusy(false)
     if (failure) setError(failure)
-    else onClose()
+    else {
+      onSaved()
+      onClose()
+    }
   }
 
   return (

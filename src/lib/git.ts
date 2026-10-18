@@ -9,7 +9,7 @@ export const git = (...args: string[]) => invoke<GitOutput>('git', { args })
 const ESCAPES: Record<string, number> = { n: 10, t: 9, '"': 34, '\\': 92 }
 
 /** Git quotes paths with unusual characters: "a \"b\".md", or utf-8 bytes as octal escapes. */
-function unquote(path: string) {
+export function unquote(path: string) {
   if (!path.startsWith('"')) return path
   const inner = path.slice(1, -1)
   const bytes: number[] = []
@@ -78,8 +78,8 @@ export const push = () => run('push')
 
 // Shapes tickets 04–06 use. Each matches an entry in `allowed()` (src-tauri/src/lib.rs); they return stdout for the caller to parse.
 
-/** One record per line, fields split by U+001F. Same string as `FILE_LOG_FORMAT` in lib.rs. */
-export const FILE_LOG_FORMAT = '--format=%H%x1f%an%x1f%aI%x1f%s' // hash, author, date, subject
+/** Records start with U+001E, fields split by U+001F; `--name-status` adds the file's path at that commit. Same string as `FILE_LOG_FORMAT` in lib.rs. */
+export const FILE_LOG_FORMAT = '--format=%x1e%H%x1f%an%x1f%aI%x1f%s' // record mark, hash, author, date, subject
 /** Same string as `GRAPH_LOG_FORMAT` in lib.rs. */
 export const GRAPH_LOG_FORMAT = '--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s' // hash, parents, author, date, refs, subject
 
@@ -92,7 +92,7 @@ async function out(...args: string[]) {
 
 /** History of one file across renames, newest first: `count` entries after skipping `skip`. */
 export const fileLog = (path: string, count: number, skip: number) =>
-  out('log', '--follow', FILE_LOG_FORMAT, '-n', String(count), '--skip', String(skip), '--', path)
+  out('log', '--follow', '--name-status', FILE_LOG_FORMAT, '-n', String(count), '--skip', String(skip), '--', path)
 
 /** History of every branch, newest first: `count` entries after skipping `skip`. */
 export const graphLog = (count: number, skip: number) => out('log', '--all', GRAPH_LOG_FORMAT, '-n', String(count), '--skip', String(skip))
@@ -114,3 +114,20 @@ export const originUrl = () =>
   )
 
 export const pushUpstream = () => out('push', '-u', 'origin', 'HEAD')
+
+export type Version = { hash: string; author: string; date: string; message: string; path: string }
+
+/** `fileLog` output as versions, newest first. `path` is the file's path at that commit (it differs from the current one before a rename). */
+export function parseVersions(out: string, current: string): Version[] {
+  let last = current // a commit with no name-status line (a merge) keeps the path of the one after it
+  return out
+    .split('\x1e')
+    .filter((rec) => rec.trim())
+    .map((rec) => {
+      const [head, ...rest] = rec.split(/\r?\n/)
+      const [hash, author, date, message] = head.split('\x1f')
+      const line = rest.find((l) => l.trim())
+      if (line) last = unquote(line.split('\t').at(-1)!)
+      return { hash, author, date, message, path: last }
+    })
+}
