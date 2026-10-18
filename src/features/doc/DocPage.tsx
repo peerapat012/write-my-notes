@@ -357,7 +357,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           </button>
         ) : (
           <button
-            className={`mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm text-neutral-500 transition-[opacity,background-color] duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:opacity-100 ${empty ? '' : 'opacity-0 group-hover/head:opacity-100'}`}
+            className={`mb-3 inline-flex h-7 items-center gap-1.5 print:hidden rounded-md px-2 text-sm text-neutral-500 transition-[opacity,background-color] duration-150 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:opacity-100 ${empty ? '' : 'opacity-0 group-hover/head:opacity-100'}`}
             onClick={openPicker}
           >
             <SmilePlus size={16} strokeWidth={1.75} /> Add icon
@@ -376,13 +376,14 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       <div className="mb-6 text-sm">
         <button
           aria-expanded={info}
-          className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
+          className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 print:hidden text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
           onClick={toggleInfo}
         >
           <ChevronRight size={14} className={`transition-transform duration-150 ${info ? 'rotate-90' : ''}`} /> Info
         </button>
-        {info && (
-          <div className="mt-1 space-y-1 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+        {/* Always in the page so it prints; collapsed it is only hidden on screen. */}
+        {(
+          <div className={`mt-1 space-y-1 rounded-md border border-neutral-200 bg-neutral-50 p-2 ${info ? '' : 'hidden print:block'}`}>
             {props.created && (
               <Row icon={CalendarClock} name="Created">
                 {new Date(props.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}

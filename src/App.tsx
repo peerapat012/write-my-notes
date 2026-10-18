@@ -169,6 +169,25 @@ export default function App() {
     return () => removeEventListener('popstate', onPop)
   }, [])
 
+  // Print is always light: drop the dark theme while the print preview is made, and mark where it came from so
+  // diagrams drawn for dark can be flipped back (index.css).
+  useEffect(() => {
+    const before = () => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.toggleAttribute('data-print-from-dark', dark)
+    }
+    const after = () => {
+      document.documentElement.classList.toggle('dark', dark)
+      document.documentElement.removeAttribute('data-print-from-dark')
+    }
+    addEventListener('beforeprint', before)
+    addEventListener('afterprint', after)
+    return () => {
+      removeEventListener('beforeprint', before)
+      removeEventListener('afterprint', after)
+    }
+  }, [dark])
+
   // Ctrl+K opens the palette, Ctrl+\ hides or shows the sidebar. Capture phase: beat the browser's search
   // bar and editor shortcuts.
   useEffect(() => {
@@ -348,9 +367,9 @@ export default function App() {
   )
 
   return (
-    <div className="flex h-screen flex-col text-sm">
+    <div className="flex h-screen flex-col text-sm print:block print:h-auto">
       {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page === '.all' ? 'All pages' : page === '.history' ? 'History' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 print:block">
         {sidebar ? (
           <Sidebar
             root={root}
@@ -377,7 +396,7 @@ export default function App() {
             git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} openGraph={() => go('.history')} onSetup={() => setSetup(true)} /> : undefined}
           />
         ) : (
-          <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
+          <div className="print:hidden flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
             <button className={iconButton} title="Show sidebar (Ctrl+\)" aria-label="Show sidebar" onClick={toggleSidebar}>
               <PanelLeftOpen size={16} />
             </button>
@@ -388,8 +407,8 @@ export default function App() {
             )}
           </div>
         )}
-        <div className="relative flex min-w-0 flex-1">
-        <main className="min-w-0 flex-1 overflow-auto">
+        <div className="relative flex min-w-0 flex-1 print:block">
+        <main className="min-w-0 flex-1 overflow-auto print:overflow-visible">
           {root && view ? (
             <VersionView vault={root} dark={dark} view={view} onRestore={restoreVersion} onBack={() => setViewing(undefined)} />
           ) : root && page?.endsWith('.md') ? (
@@ -450,7 +469,7 @@ export default function App() {
           (panel ? (
             <RightPanel tabs={tabs} onClose={togglePanel} />
           ) : (
-            <button className={`${iconButton} absolute top-2 right-4 z-10`} title="Show panel" aria-label="Show panel" onClick={togglePanel}>
+            <button className={`${iconButton} absolute top-2 right-4 z-10 print:hidden`} title="Show panel" aria-label="Show panel" onClick={togglePanel}>
               <PanelRightOpen size={16} />
             </button>
           ))}

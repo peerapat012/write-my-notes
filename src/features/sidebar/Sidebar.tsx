@@ -73,7 +73,7 @@ const footerRow =
 export default function Sidebar({ root, openToday, favorites, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
   const { create, move } = props
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
+    <aside className="print:hidden flex w-[260px] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
       <header className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-3">
         <span aria-hidden className="grid size-5 place-items-center rounded-[5px] bg-neutral-900 text-[11px] font-bold text-white">
           N

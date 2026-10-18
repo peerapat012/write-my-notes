@@ -49,13 +49,13 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     const tags = el('div', 'flex min-w-0 flex-wrap items-center gap-1')
     for (const tag of task.tags) {
       const pill = el('span', 'inline-flex items-center gap-1 rounded bg-neutral-100 py-0.5 pr-1 pl-2 text-xs', tag)
-      const x = el('button', 'rounded text-neutral-400 hover:text-neutral-700', '×')
+      const x = el('button', 'print:hidden rounded text-neutral-400 hover:text-neutral-700', '×')
       x.setAttribute('aria-label', `Remove tag ${tag}`)
       x.onclick = () => edit(i, { tags: task.tags.filter((t) => t !== tag) })
       pill.append(x)
       tags.append(pill)
     }
-    const add = el('input', 'w-16 min-w-0 flex-1 bg-transparent py-0.5 text-xs outline-none placeholder:text-neutral-400')
+    const add = el('input', 'print:hidden w-16 min-w-0 flex-1 bg-transparent py-0.5 text-xs outline-none placeholder:text-neutral-400')
     add.placeholder = 'Add tag'
     add.setAttribute('aria-label', 'Add tag')
     add.onkeydown = (e) => {
@@ -67,7 +67,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     }
     tags.append(add)
 
-    const del = el('button', 'grid size-6 place-items-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900', '×')
+    const del = el('button', 'print:hidden grid size-6 place-items-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900', '×')
     del.setAttribute('aria-label', 'Delete task')
     del.title = 'Delete task'
     del.onclick = () => commit(tasks.filter((_, j) => j !== i))
@@ -76,7 +76,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     root.append(row)
   })
 
-  const addRow = el('button', 'flex w-full items-center gap-1.5 px-3 py-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900', '+ New task')
+  const addRow = el('button', 'print:hidden flex w-full items-center gap-1.5 px-3 py-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900', '+ New task')
   addRow.onclick = () => commit([...tasks, { name: '', status: 'Not started', tags: [] }])
   root.append(addRow)
   return root

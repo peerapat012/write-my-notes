@@ -251,3 +251,27 @@ main .milkdown .mermaid-error {
 .tasks-source {
   display: none;
 }
+
+/* Print / Save as PDF: only the doc. App.tsx drops the dark theme for the print preview. */
+@media print {
+  .milkdown-block-handle,
+  .milkdown-toolbar,
+  .milkdown-slash-menu,
+  .milkdown-link-preview,
+  .milkdown-link-edit,
+  .milkdown-code-block .tools,
+  .milkdown-image-block .image-edit,
+  [popover] {
+    display: none !important;
+  }
+  /* Mermaid drawn for the dark theme: flip it back to something that reads on white. */
+  [data-print-from-dark] .milkdown-code-block .preview svg {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

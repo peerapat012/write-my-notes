@@ -9,7 +9,7 @@ export default function RightPanel({ tabs, onClose }: { tabs: Tab[]; onClose: ()
   const [active, setActive] = useState(tabs[0].id)
   const tab = tabs.find((t) => t.id === active) ?? tabs[0]
   return (
-    <aside aria-label="Side panel" className="flex w-[260px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50">
+    <aside aria-label="Side panel" className="print:hidden flex w-[260px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50">
       <header className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-3">
         <div role="tablist" className="mr-auto flex gap-1">
           {tabs.map((t) => (
