@@ -50,7 +50,7 @@ export default function VersionView({ vault, dark, view, onRestore, onBack, labe
 }
 
 /** The doc editor, read-only. Images come from the current `assets/`. */
-function DocVersion({ vault, path, text }: { vault: Vault; path: string; text: string }) {
+export function DocVersion({ vault, path, text, className = 'mx-auto max-w-3xl px-16 pt-10 pb-32' }: { vault: Vault; path: string; text: string; className?: string }) {
   const mount = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const crepe = new Crepe({
@@ -67,7 +67,7 @@ function DocVersion({ vault, path, text }: { vault: Vault; path: string; text: s
     crepe.create()
     return () => void crepe.destroy()
   }, [vault, path, text])
-  return <div className="mx-auto max-w-3xl px-16 pt-10 pb-32" ref={mount} />
+  return <div className={className} ref={mount} />
 }
 
 /** Excalidraw in view mode. */

@@ -3,7 +3,7 @@ import { relativePath, resolvePath } from './paths'
 const EXTERNAL = /^([a-z][a-z0-9+.-]*:|#|\/)/i
 // ponytail: regex scan, so links inside code blocks get rewritten too; parse markdown if that bites.
 const MD_LINK = /(\]\()(<[^>]*>|[^)\s]+)/g // [text](url "title"), ![alt](url), [text](<url with spaces>)
-const BOARD_LINK = /("(?:dataURL|docPath)":\s*")([^"]*)/g // image files and doc cards in `.excalidraw` JSON
+const BOARD_LINK = /("(?:dataURL|docPath|link)":\s*")([^"]*)/g // image files, doc cards (v2 `docPath`, v3 embeddable `link`) in `.excalidraw` JSON
 
 /** Root-relative target of link `url` in the file at `from`, or undefined for external/anchor links. */
 export function linkTarget(from: string, url: string) {

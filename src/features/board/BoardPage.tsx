@@ -21,6 +21,7 @@ import {
   Diamond,
   Download,
   Eraser,
+  FileText,
   Hand,
   Image,
   type LucideIcon,
@@ -43,7 +44,9 @@ import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
 import { createContent, type Mode } from '@/ai/create'
 import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
 import AiPanel from './AiPanel'
-import { cardText, exportElements, toDisk } from './board'
+import DocCard from './DocCard'
+import DocPicker from './DocPicker'
+import { exportElements, toDisk } from './board'
 import Menu from '@/components/Menu'
 import { readBoard } from './readBoard'
 import ConflictDialog from '@/components/ConflictDialog'
@@ -55,7 +58,7 @@ import { panel } from '@/components/ui'
 import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { searchTexts, type BoardText } from '@/features/search/boardText'
 
-type Props = { focusTitle: boolean; onIconChange: () => void; vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { docTexts: Map<string, string>; focusTitle: boolean; onIconChange: () => void; vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -73,7 +76,11 @@ const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
 ]
 const EMOJIS = '😀 😂 😍 🤔 😎 😢 😡 👍 👎 👏 🙏 💪 🔥 ⭐ ❤️ ✅ ❌ ⚠️ ❓ 💡 🎉 🚀 📌 📝'.split(' ')
 const STICKY = 200
-const CARD = 260 // doc card width
+const DOC_CARD = { w: 380, h: 300 } // size of a new doc card
+
+/** Path (relative to the board) of the doc a card shows: a v3 embeddable's `link`, or a v2 text card's `docPath`. */
+const cardLink = (el: { type: string; link?: string | null; customData?: Record<string, any> }) =>
+  el.type === 'embeddable' && el.link && !/^[a-z][a-z0-9+.-]*:/i.test(el.link) ? el.link : (el.customData?.docPath as string | undefined)
 
 const FILLS = ['transparent', '#ffec99', '#b2f2bb', '#a5d8ff', '#ffc9c9', '#e9ecef']
 const SIZES = [14, 18, 24, 34, 48]
@@ -187,7 +194,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const onSaveRef = useRef(onSave) // read by the autosave, which outlives App re-renders
   useEffect(() => {
@@ -197,6 +204,7 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
   const [icon, setIcon] = useState<string>()
   const [iconColor, setIconColor] = useState<string>()
   const [picker, setPicker] = useState<DOMRect>()
+  const [docPicker, setDocPicker] = useState(false) // page picker for a new doc card
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
@@ -277,7 +285,7 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
     const a = board.api()!
     const state = a.getAppState()
     const opts = {
-      elements: exportElements(a.getSceneElements(), state.selectedElementIds),
+      elements: exportElements(a.getSceneElements(), state.selectedElementIds).flatMap((el) => (el.type === 'embeddable' ? cardBox(el) : [el])),
       appState: { ...state, exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
       files: a.getFiles(),
     }
@@ -285,6 +293,16 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
     const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${title}.${type}` })
     link.click()
     URL.revokeObjectURL(link.href)
+  }
+
+  /** A doc card in an export: a plain box with the doc's title (the live doc cannot be drawn into a PNG or SVG). */
+  function cardBox(el: ExcalidrawElement) {
+    const target = cardLink(el)
+    const name = target ? resolvePath(path, target) : ''
+    const title = name ? name.slice(name.lastIndexOf('/') + 1).replace(/\.md$/, '') : 'Doc'
+    return convertToExcalidrawElements([
+      { type: 'rectangle', x: el.x, y: el.y, width: el.width, height: el.height, backgroundColor: '#ffffff', fillStyle: 'solid', strokeColor: '#a3a3a3', roughness: 0, roundness: { type: 3 }, label: { text: docTexts.has(name) ? title : `Broken link: ${title}`, fontSize: 20, fontFamily: FONT_FAMILY.Nunito } },
+    ] as never)
   }
 
   const center = () => {
@@ -328,41 +346,29 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
     )
   }
 
+  /** Adds a doc card (an embeddable whose `link` is the doc's path relative to this board) centred on (x, y). */
+  function addDocCard(doc: string, x: number, y: number) {
+    add([{ type: 'embeddable', x: x - DOC_CARD.w / 2, y: y - DOC_CARD.h / 2, width: DOC_CARD.w, height: DOC_CARD.h, link: relativePath(path, doc) }] as never)
+  }
+
   // Sidebar drag (`text/x-page`, ticket 08) of a doc onto the board: add a doc card where it was dropped.
-  async function dropDoc(e: React.DragEvent) {
+  function dropDoc(e: React.DragEvent) {
     const doc = e.dataTransfer.getData('text/x-page')
     if (!doc.endsWith('.md')) return
     e.preventDefault()
     e.stopPropagation() // keep Excalidraw's own drop handler out of it
     const { x, y } = viewportCoordsToSceneCoords(e, board.api()!.getAppState())
-    add([
-      {
-        type: 'rectangle',
-        x: x - CARD / 2,
-        y: y - 20,
-        width: CARD,
-        height: 100,
-        backgroundColor: '#ffffff',
-        fillStyle: 'solid',
-        strokeColor: '#a3a3a3',
-        roughness: 0,
-        roundness: { type: 3 },
-        customData: { docPath: relativePath(path, doc) },
-        label: { text: cardText(doc, await vault.read(doc)), fontSize: 16, fontFamily: FONT_FAMILY.Nunito, textAlign: 'left', verticalAlign: 'top' },
-      },
-    ])
+    addDocCard(doc, x, y)
   }
 
   // Double-click on a doc card opens its doc (instead of Excalidraw's text editing).
   function openCard(e: React.MouseEvent) {
     const a = board.api()!
     const { x, y } = viewportCoordsToSceneCoords(e, a.getAppState())
-    const card = a
-      .getSceneElements()
-      .findLast((el) => el.customData?.docPath && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height)
+    const card = a.getSceneElements().findLast((el) => cardLink(el) && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height)
     if (!card) return
     e.stopPropagation()
-    const target = resolvePath(path, card.customData!.docPath)
+    const target = resolvePath(path, cardLink(card)!)
     vault.stat(target).then(() => go(target), () => {}) // broken card: stay
   }
 
@@ -446,6 +452,17 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
           </span>
         </button>
       </header>
+      {docPicker && (
+        <DocPicker
+          docs={[...docTexts.keys()].sort((a, b) => a.localeCompare(b))}
+          onClose={() => setDocPicker(false)}
+          onPick={(doc) => {
+            setDocPicker(false)
+            const { x, y } = center()
+            addDocCard(doc, x, y)
+          }}
+        />
+      )}
       {picker && (<IconPicker anchor={picker} icon={icon} color={iconColor} onChange={changeIcon} onClose={() => setPicker(undefined)} />)}
       <div
         ref={box}
@@ -467,6 +484,18 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
           initialData={initialData}
           onChange={onChange}
           onPointerUp={onPointerUp}
+          validateEmbeddable={(link) => (cardLink({ type: 'embeddable', link }) ? true : undefined)}
+          renderEmbeddable={(el) => {
+            const link = cardLink(el)
+            return link ? <DocCard vault={vault} board={path} link={link} text={docTexts.get(resolvePath(path, link))} /> : null
+          }}
+          onLinkOpen={(el, event) => {
+            const link = cardLink(el)
+            if (!link) return
+            event.preventDefault() // a doc card's link is a page, not a URL
+            const target = resolvePath(path, link)
+            vault.stat(target).then(() => go(target), () => {})
+          }}
           theme={dark ? 'dark' : 'light'}
           UIOptions={{
             canvasActions: { changeViewBackgroundColor: false, clearCanvas: false, export: false, loadScene: false, saveToActiveFile: false, toggleTheme: false, saveAsImage: false },
@@ -485,6 +514,9 @@ function Board({ focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, 
               <Icon size={16} />
             </button>
           ))}
+          <button title="Doc card" aria-label="Doc card" className={btn} onClick={() => setDocPicker(true)}>
+            <FileText size={16} />
+          </button>
           <button
             title="Emoji"
             aria-label="Emoji"

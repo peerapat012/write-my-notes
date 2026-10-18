@@ -62,6 +62,7 @@ export default function App() {
   const icons = useMemo(() => new Map(entries.map((e) => [e.path, { icon: e.icon, iconColor: e.iconColor }])), [entries])
   const [favs, setFavs] = useState<string[]>([]) // favorite page paths of the open notes folder
   const [page, setPage] = useState(currentPage)
+  const docTexts = useMemo(() => new Map(entries.flatMap((e) => (e.path.endsWith('.md') && e.text !== undefined ? [[e.path, e.text] as const] : []))), [entries]) // doc cards on boards show these
   // Pages that link to or embed the open doc.
   const linkedFrom = useMemo(
     () =>
@@ -443,7 +444,7 @@ export default function App() {
               linkedFrom={linkedFrom}
             />
           ) : root && page?.endsWith('.excalidraw') ? (
-            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
+            <BoardPage docTexts={docTexts} key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
           ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
             <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
           ) : root && page === '.all' ? (

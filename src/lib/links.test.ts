@@ -53,3 +53,9 @@ test('movedPath', () => {
   expect(movedPath('PX.md', 'P.md', 'Q/R.md')).toBe('PX.md')
   expect(movedPath('F/x.md', 'F', 'G/F')).toBe('G/F/x.md')
 })
+
+test('boards: an embeddable doc card link follows a rename or move of the doc and of the board', () => {
+  const board = '{\n  "elements": [{ "type": "embeddable", "link": "Doc.md" }, { "type": "rectangle", "link": "https://x.dev/Doc.md" }, { "link": null }]\n}'
+  expect(rewriteLinks({ 'Flow.excalidraw': board }, 'Doc.md', 'Docs/Renamed.md')).toEqual({ 'Flow.excalidraw': board.replace('"Doc.md"', '"Docs/Renamed.md"') })
+  expect(rewriteLinks({ 'Flow.excalidraw': board }, 'Flow.excalidraw', 'Sub/Flow.excalidraw')).toEqual({ 'Sub/Flow.excalidraw': board.replace('"link": "Doc.md"', '"link": "../Doc.md"') })
+})
