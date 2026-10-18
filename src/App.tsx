@@ -1,12 +1,15 @@
-import { FileText, FolderOpen, PanelLeftOpen, Presentation, Search } from 'lucide-react'
+import { FileText, FolderOpen, PanelLeftOpen, PanelRightOpen, Presentation, Search } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import Dialog from '@/components/Dialog'
 import TitleBar from '@/components/TitleBar'
+import RightPanel from '@/components/RightPanel'
 import EmptyState from '@/components/EmptyState'
 import { INVALID } from '@/components/NameInput'
 import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
+import OutlineList from '@/features/doc/OutlineList'
+import type { Heading } from '@/features/doc/outline'
 import { dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
@@ -24,6 +27,7 @@ const currentPage = () =>
   location.pathname.startsWith(PAGE_PREFIX) ? decodeURIComponent(location.pathname.slice(PAGE_PREFIX.length)) : null
 
 const SIDEBAR_KEY = 'write-my-notes:sidebar'
+const PANEL_KEY = 'write-my-notes:panel'
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
 const subscribeDark = (cb: () => void) => {
@@ -53,6 +57,8 @@ export default function App() {
   const [naming, setNaming] = useState<{ dir: string; type: 'doc' | 'board' }>() // new-page name dialog
   const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
+  const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
+  const [outline, setOutline] = useState<Heading[]>([])
   const systemDark = useSyncExternalStore(subscribeDark, () => darkQuery.matches)
   const dark = settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
   useLayoutEffect(() => void document.documentElement.classList.toggle('dark', dark), [dark]) // before paint: no light flash
@@ -65,6 +71,13 @@ export default function App() {
   function toggleSidebar() {
     setSidebar((shown) => {
       localStorage.setItem(SIDEBAR_KEY, shown ? 'hidden' : 'shown')
+      return !shown
+    })
+  }
+
+  function togglePanel() {
+    setPanel((shown) => {
+      localStorage.setItem(PANEL_KEY, shown ? 'hidden' : 'shown')
       return !shown
     })
   }
@@ -255,6 +268,7 @@ export default function App() {
             )}
           </div>
         )}
+        <div className="relative flex min-w-0 flex-1">
         <main className="min-w-0 flex-1 overflow-auto">
           {root && page?.endsWith('.md') ? (
             <DocPage
@@ -267,6 +281,7 @@ export default function App() {
               onRename={(name) => rename(page, name)}
               onIconChange={() => open(root)}
               onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
+              onHeadings={setOutline}
               model={settings.model}
               openSettings={() => setShowSettings(true)}
             />
@@ -302,6 +317,15 @@ export default function App() {
             </EmptyState>
           )}
         </main>
+        {root && page?.endsWith('.md') &&
+          (panel ? (
+            <RightPanel tabs={[{ id: 'outline', label: 'Outline', content: <OutlineList headings={outline} /> }]} onClose={togglePanel} />
+          ) : (
+            <button className={`${iconButton} absolute top-2 right-4 z-10`} title="Show panel" aria-label="Show panel" onClick={togglePanel}>
+              <PanelRightOpen size={16} />
+            </button>
+          ))}
+        </div>
         {showSearch && root && <SearchPalette index={index} go={go} onClose={() => setShowSearch(false)} />}
         {naming && (
           <Dialog aria-label={`New ${naming.type}`} onClose={() => setNaming(undefined)}>

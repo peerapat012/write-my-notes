@@ -17,6 +17,7 @@ import DocAi from './DocAi'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { mermaidPreview } from './mermaid'
+import { headings, type Heading } from './outline'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
@@ -72,11 +73,12 @@ type Props = {
   onRename: (name: string) => void
   onIconChange: () => void
   onSave: (text: string) => void // keeps the search index current
+  onHeadings: (headings: Heading[]) => void // feeds the outline panel
   model: string // Gemini model for `/ai`
   openSettings: () => void
 }
 
-export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, model, openSettings }: Props) {
+export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, onHeadings, model, openSettings }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
@@ -90,8 +92,10 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const [blockMenu, setBlockMenu] = useState<{ at: DOMRect; footer: string }>() // drag handle click menu
   const [ai, setAi] = useState<{ at: DOMRect; from: number; to: number; selection: string; block?: boolean }>() // `/ai` popover
   const onSaveRef = useRef(onSave) // read by the load effect, which must not re-run when App re-renders
+  const onHeadingsRef = useRef(onHeadings)
   useEffect(() => {
     onSaveRef.current = onSave
+    onHeadingsRef.current = onHeadings
   })
 
   useEffect(() => {
@@ -178,14 +182,18 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       // Match common hand-written markdown so saves don't churn git diffs.
       crepe.editor.config((ctx) => ctx.update(remarkStringifyOptionsCtx, (o) => ({ ...o, bullet: '-' as const, rule: '-' as const })))
       crepe.on((l) =>
-        l.markdownUpdated(() => {
+        l.markdownUpdated((_, markdown) => {
+          onHeadingsRef.current(headings(markdown))
           dirty.add(path)
           clearTimeout(timer)
           timer = setTimeout(() => save.current(), 500)
         }),
       )
       await crepe.create()
-      if (!cancelled) setReady(true)
+      if (!cancelled) {
+        setReady(true)
+        onHeadingsRef.current(headings(body))
+      }
       editor.current = crepe
       loaded = true
 
@@ -215,6 +223,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
       cancelled = true
       if (timer) save.current() // flush pending edits when leaving the page
       editor.current = undefined
+      onHeadingsRef.current([])
       crepe?.destroy()
     }
   }, [vault, path, rev, dark])
