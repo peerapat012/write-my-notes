@@ -1,4 +1,5 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
+import { editorViewCtx } from '@milkdown/kit/core'
 import { useEffect, useRef } from 'react'
 import { calloutItem, calloutView } from '@/features/doc/calloutView'
 import { datatableView } from '@/features/doc/datatableView'
@@ -36,7 +37,10 @@ export default function DevEditor() {
   useEffect(() => {
     const crepe = new Crepe({ root: mount.current, defaultValue: SAMPLE, featureConfigs: { [CrepeFeature.BlockEdit]: { buildMenu: (b) => b.getGroup('advanced').addItem('callout', calloutItem) } } })
     crepe.editor.use(tasksView).use(datatableView('Dev.md')).use(calloutView(() => {}))
-    crepe.create().then(() => ((window as unknown as { crepes: Crepe[] }).crepes ??= []).push(crepe)) // for checking the saved Markdown from the console
+    crepe.create().then(() => {
+      ;((window as unknown as { crepes: Crepe[] }).crepes ??= []).push(crepe)
+      ;(window as unknown as { pmView: () => unknown }).pmView = () => crepe.editor.action((ctx) => ctx.get(editorViewCtx))
+    }) // for checking the saved Markdown from the console
     return () => void crepe.destroy()
   }, [])
   return (

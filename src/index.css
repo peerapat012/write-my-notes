@@ -11,6 +11,12 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Crepe's reset used to cancel every outline inside the editor. In a lower layer it no longer does, and the global
+   `:focus-visible` ring then framed the whole editor (and its blocks) whenever it had focus. Unlayered, so it wins. */
+.milkdown :focus-visible {
+  outline: none;
+}
+
 /* Warm grays (Notion-like) and one muted blue accent. Roles: white = page and panels, 50 = sidebar and code
    surfaces, 100 = hover, 200 = borders and selected rows, 300 = input borders, 400 = icons and disabled
    (3:1), 500 = muted text, shortcuts and placeholders (4.5:1), 700 = secondary text, 900 = body text.
