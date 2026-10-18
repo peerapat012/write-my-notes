@@ -1,6 +1,7 @@
 import { FileText, FolderOpen, PanelLeftOpen, Presentation, Search } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import Dialog from '@/components/Dialog'
+import TitleBar from '@/components/TitleBar'
 import EmptyState from '@/components/EmptyState'
 import { INVALID } from '@/components/NameInput'
 import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
@@ -221,134 +222,137 @@ export default function App() {
   )
 
   return (
-    <div className="flex h-screen text-sm">
-      {sidebar ? (
-        <Sidebar
-          root={root}
-          stored={stored}
-          loading={loading}
-          tree={tree}
-          page={page}
-          go={go}
-          create={create}
-          move={move}
-          remove={setDeleting}
-          reopen={reopen}
-          pickFolder={pickFolder}
-          openSettings={() => setShowSettings(true)}
-          openSearch={() => setShowSearch(true)}
-          hide={toggleSidebar}
-          git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
-        />
-      ) : (
-        <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
-          <button className={iconButton} title="Show sidebar (Ctrl+\)" aria-label="Show sidebar" onClick={toggleSidebar}>
-            <PanelLeftOpen size={16} />
-          </button>
-          {root && (
-            <button className={iconButton} title="Search (Ctrl+K)" aria-label="Search" onClick={() => setShowSearch(true)}>
-              <Search size={16} />
-            </button>
-          )}
-        </div>
-      )}
-      <main className="min-w-0 flex-1 overflow-auto">
-        {root && page?.endsWith('.md') ? (
-          <DocPage
-            key={page + rev}
-            vault={root}
-            dark={dark}
-            path={page}
-            exists={exists}
+    <div className="flex h-screen flex-col text-sm">
+      {isTauri && <TitleBar title={page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
+      <div className="flex min-h-0 flex-1">
+        {sidebar ? (
+          <Sidebar
+            root={root}
+            stored={stored}
+            loading={loading}
+            tree={tree}
+            page={page}
             go={go}
-            onRename={(name) => rename(page, name)}
-            onIconChange={() => open(root)}
-            onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
-            model={settings.model}
+            create={create}
+            move={move}
+            remove={setDeleting}
+            reopen={reopen}
+            pickFolder={pickFolder}
             openSettings={() => setShowSettings(true)}
+            openSearch={() => setShowSearch(true)}
+            hide={toggleSidebar}
+            git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
           />
-        ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
-        ) : loading ? null : root ? (
-          <EmptyState icon={FileText} title="No page open" actions={newPage}>
-            Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
-          </EmptyState>
         ) : (
-          <EmptyState
-            icon={FolderOpen}
-            title="Open your notes folder"
-            actions={
-              stored ? (
-                <>
-                  <button className={primaryButton} onClick={reopen}>
-                    Reopen “{stored.name}”
-                  </button>
-                  <button className={secondaryButton} onClick={pickFolder}>
-                    Open another folder
-                  </button>
-                </>
-              ) : (
-                <button className={primaryButton} onClick={pickFolder}>
-                  <FolderOpen size={16} /> Open folder
-                </button>
-              )
-            }
-          >
-            Notedflow keeps each page as a plain Markdown or Excalidraw file in a folder you choose, so git and your
-            other editors can read them too.
-          </EmptyState>
+          <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
+            <button className={iconButton} title="Show sidebar (Ctrl+\)" aria-label="Show sidebar" onClick={toggleSidebar}>
+              <PanelLeftOpen size={16} />
+            </button>
+            {root && (
+              <button className={iconButton} title="Search (Ctrl+K)" aria-label="Search" onClick={() => setShowSearch(true)}>
+                <Search size={16} />
+              </button>
+            )}
+          </div>
         )}
-      </main>
-      {showSearch && root && <SearchPalette index={index} go={go} onClose={() => setShowSearch(false)} />}
-      {naming && (
-        <Dialog aria-label={`New ${naming.type}`} onClose={() => setNaming(undefined)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              createNamed(naming.dir, naming.type, String(new FormData(e.currentTarget).get('name')).trim())
-            }}
-          >
-            <h2 className="font-semibold">New {naming.type}</h2>
-            <input
-              name="name"
-              autoFocus
-              required
-              aria-label="Page name"
-              placeholder={naming.type === 'doc' ? 'Meeting notes' : 'Architecture sketch'}
-              onInput={(e) => {
-                const bad = INVALID.test(e.currentTarget.value.trim())
-                e.currentTarget.setCustomValidity(bad ? 'A name can’t start with a dot or contain \\ / : * ? " < > |' : '')
-              }}
-              className={`${input} mt-3`}
+        <main className="min-w-0 flex-1 overflow-auto">
+          {root && page?.endsWith('.md') ? (
+            <DocPage
+              key={page + rev}
+              vault={root}
+              dark={dark}
+              path={page}
+              exists={exists}
+              go={go}
+              onRename={(name) => rename(page, name)}
+              onIconChange={() => open(root)}
+              onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
+              model={settings.model}
+              openSettings={() => setShowSettings(true)}
             />
-            {naming.dir && <p className="mt-1.5 truncate text-xs text-neutral-500">Inside {naming.dir}</p>}
+          ) : root && page?.endsWith('.excalidraw') ? (
+            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+          ) : loading ? null : root ? (
+            <EmptyState icon={FileText} title="No page open" actions={newPage}>
+              Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
+            </EmptyState>
+          ) : (
+            <EmptyState
+              icon={FolderOpen}
+              title="Open your notes folder"
+              actions={
+                stored ? (
+                  <>
+                    <button className={primaryButton} onClick={reopen}>
+                      Reopen “{stored.name}”
+                    </button>
+                    <button className={secondaryButton} onClick={pickFolder}>
+                      Open another folder
+                    </button>
+                  </>
+                ) : (
+                  <button className={primaryButton} onClick={pickFolder}>
+                    <FolderOpen size={16} /> Open folder
+                  </button>
+                )
+              }
+            >
+              Notedflow keeps each page as a plain Markdown or Excalidraw file in a folder you choose, so git and your
+              other editors can read them too.
+            </EmptyState>
+          )}
+        </main>
+        {showSearch && root && <SearchPalette index={index} go={go} onClose={() => setShowSearch(false)} />}
+        {naming && (
+          <Dialog aria-label={`New ${naming.type}`} onClose={() => setNaming(undefined)}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                createNamed(naming.dir, naming.type, String(new FormData(e.currentTarget).get('name')).trim())
+              }}
+            >
+              <h2 className="font-semibold">New {naming.type}</h2>
+              <input
+                name="name"
+                autoFocus
+                required
+                aria-label="Page name"
+                placeholder={naming.type === 'doc' ? 'Meeting notes' : 'Architecture sketch'}
+                onInput={(e) => {
+                  const bad = INVALID.test(e.currentTarget.value.trim())
+                  e.currentTarget.setCustomValidity(bad ? 'A name can’t start with a dot or contain \\ / : * ? " < > |' : '')
+                }}
+                className={`${input} mt-3`}
+              />
+              {naming.dir && <p className="mt-1.5 truncate text-xs text-neutral-500">Inside {naming.dir}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" className={ghostButton} onClick={() => setNaming(undefined)}>
+                  Cancel
+                </button>
+                <button className={primaryButton}>Create</button>
+              </div>
+            </form>
+          </Dialog>
+        )}
+        {deleting && (
+          <Dialog aria-label={`Delete ${deleting.name}`} onClose={() => setDeleting(undefined)}>
+            <h2 className="font-semibold">Delete “{deleting.name}”?</h2>
+            <p className="mt-2 text-neutral-700">
+              {!!deletingPages && `This also deletes ${deletingPages} page${deletingPages > 1 ? 's' : ''} inside it. `}
+              The files are removed from disk. Use git to get them back.
+            </p>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className={ghostButton} onClick={() => setNaming(undefined)}>
+              <button autoFocus className={ghostButton} onClick={() => setDeleting(undefined)}>
                 Cancel
               </button>
-              <button className={primaryButton}>Create</button>
+              <button className={dangerButton} onClick={() => remove(deleting)}>
+                Delete
+              </button>
             </div>
-          </form>
-        </Dialog>
-      )}
-      {deleting && (
-        <Dialog aria-label={`Delete ${deleting.name}`} onClose={() => setDeleting(undefined)}>
-          <h2 className="font-semibold">Delete “{deleting.name}”?</h2>
-          <p className="mt-2 text-neutral-700">
-            {!!deletingPages && `This also deletes ${deletingPages} page${deletingPages > 1 ? 's' : ''} inside it. `}
-            The files are removed from disk. Use git to get them back.
-          </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button autoFocus className={ghostButton} onClick={() => setDeleting(undefined)}>
-              Cancel
-            </button>
-            <button className={dangerButton} onClick={() => remove(deleting)}>
-              Delete
-            </button>
-          </div>
-        </Dialog>
-      )}
-      {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
+          </Dialog>
+        )}
+        {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
+      </div>
     </div>
   )
 }

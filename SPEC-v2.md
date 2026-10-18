@@ -53,7 +53,7 @@ Everything in [SPEC.md](SPEC.md) (v1) still holds unless this file says otherwis
 - Open folder: `plugin-dialog` folder picker. The app remembers the last folder path and reopens it on start.
 - External changes: the v1 focus check (`lastModified`) through `Vault.stat`.
 - UI is the same as the web build. Desktop-only changes:
-  - native Windows title bar
+  - custom title bar in the app theme (frameless window; page name, minimize, maximize, close). Changed from "native Windows title bar" after v2-07. Trade-off: the Windows 11 snap-layout flyout on the maximize button is lost; drag-to-edge and Win+Arrow snapping still work.
   - desktop copy for the empty state and open folder
   - app shortcuts must not clash with webview or Windows defaults
 - No separate UI/UX redesign round in v2. The new git UI is designed in its own ticket.

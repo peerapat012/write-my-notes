@@ -14,7 +14,7 @@ The same app runs as a Windows desktop app on Tauri 2.
 - Tauri capabilities: only what the app uses (fs inside the notes folder, dialog). No shell yet.
 - Gemini calls work from the Tauri webview. Check CSP and allowed origins.
 - Desktop UX:
-  - Use the native Windows title bar. No custom frameless window.
+  - Custom title bar in the app theme (frameless window), not the native one. Changed after this ticket shipped; see SPEC-v2.md.
   - Review `EmptyState` and open-folder copy for desktop: no permission re-prompt, and the last folder reopens on start. Keep the web copy as it is.
   - Check that app shortcuts (Ctrl+K and the others) are not taken by the webview or Windows. Disable webview defaults that get in the way, such as the reload shortcut and the browser context menu outside editors.
 
@@ -27,5 +27,5 @@ The same app runs as a Windows desktop app on Tauri 2.
 - Restart the app: the last folder opens without a picker.
 - Edit a file outside the app, then focus the app: it reloads the file, or asks when there are unsaved edits.
 - The web build (`npm run dev`) still works as before.
-- The window has the native title bar, with snap layouts working.
+- The window has a themed title bar with working minimize, maximize and close, and the bar drags the window.
 - Ctrl+K opens the palette, and F5 or Ctrl+R does not reload the app.
