@@ -42,6 +42,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
 import { createContent, type Mode } from '@/ai/create'
+import { boundsOf, docsPrompt, placeRight } from '@/ai/docs'
 import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
 import AiPanel from './AiPanel'
 import DocCard from './DocCard'
@@ -312,8 +313,27 @@ function Board({ docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, open
 
   /** Generates `mode` content from the prompt at the viewport centre; one undo step removes it. */
   async function create(mode: Mode, prompt: string, n: number) {
-    const { x, y } = center()
-    add((await createContent(model, mode, prompt, n, x, y)) as never)
+    const cards = selectedDocCards()
+    if (!cards.length) {
+      const { x, y } = center()
+      return add((await createContent(model, mode, prompt, n, x, y)) as never)
+    }
+    // Selected doc cards are the input; the result goes to the right of them.
+    const made = await createContent(model, mode, docsPrompt(prompt, cards.map(({ title, text }) => ({ title, text }))), n, 0, 0)
+    add(placeRight(made, boundsOf(cards.map((c) => c.el))) as never)
+  }
+
+  /** The doc cards in the selection, with their titles and current text. */
+  function selectedDocCards() {
+    const a = board.api()
+    if (!a) return []
+    const selected = a.getAppState().selectedElementIds
+    return a.getSceneElements().flatMap((el) => {
+      const link = selected[el.id] ? cardLink(el) : undefined
+      if (!link) return []
+      const doc = resolvePath(path, link)
+      return [{ el, title: doc.slice(doc.lastIndexOf('/') + 1).replace(/\.md$/, ''), text: docTexts.get(doc) ?? '' }]
+    })
   }
 
   function placeEmoji(emoji: string) {
@@ -545,7 +565,7 @@ function Board({ docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, open
             ))}
           </div>
         )}
-        {aiOpen && <AiPanel selected={ui.selected} onEdit={editSelected} onCreate={create} onSummarize={summarizeBoard} openSettings={openSettings} />}
+        {aiOpen && <AiPanel docs={selectedDocCards().map((c) => c.title)} selected={ui.selected} onEdit={editSelected} onCreate={create} onSummarize={summarizeBoard} openSettings={openSettings} />}
         {ui.selected > 0 && (
           <div
             className={`${panel} absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 p-1 transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}

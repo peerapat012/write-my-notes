@@ -5,6 +5,7 @@ import { geminiKey, NO_KEY } from '@/ai/gemini'
 import type { Mode } from '@/ai/create'
 
 type Props = {
+  docs: string[] // titles of the doc cards in the selection: the input for Create new
   selected: number
   onEdit: (instruction: string) => Promise<void>
   onCreate: (mode: Mode, prompt: string, n: number) => Promise<void>
@@ -19,7 +20,7 @@ const MODES: [Mode, string, typeof Sparkles][] = [
 ]
 
 /** Top-bar AI popover: a prompt and the actions that use it. */
-export default function AiPanel({ selected, onEdit, onCreate, onSummarize, openSettings }: Props) {
+export default function AiPanel({ docs, selected, onEdit, onCreate, onSummarize, openSettings }: Props) {
   const [prompt, setPrompt] = useState('')
   const [n, setN] = useState(6)
   const [busy, setBusy] = useState<string>()
@@ -36,7 +37,7 @@ export default function AiPanel({ selected, onEdit, onCreate, onSummarize, openS
     }
     setBusy(undefined)
   }
-  const off = !!busy || noKey || !prompt.trim()
+  const off = !!busy || noKey || (!prompt.trim() && !docs.length) // doc cards are enough input
   const action = 'flex h-8 items-center justify-center gap-1.5 rounded-md text-[13px] font-medium transition-opacity disabled:opacity-40'
 
   return (
@@ -62,6 +63,14 @@ export default function AiPanel({ selected, onEdit, onCreate, onSummarize, openS
         {busy === 'edit' ? 'Editing…' : `Edit ${selected} selected`}
       </button>
       <div className="mt-1 text-[12px] font-medium text-neutral-500">Create new</div>
+      {docs.length > 0 && (
+        <p className="flex items-start gap-1.5 rounded-md bg-neutral-100 p-2 text-[13px] text-neutral-700">
+          <FileText size={14} className="mt-0.5 shrink-0" />
+          <span>
+            From {docs.length === 1 ? 'doc' : `${docs.length} docs`}: {docs.join(', ')}
+          </span>
+        </p>
+      )}
       <label className="flex items-center gap-2 text-[13px] text-neutral-700">
         Items
         <input type="range" min={1} max={12} value={n} onChange={(e) => setN(+e.target.value)} className="flex-1" />
