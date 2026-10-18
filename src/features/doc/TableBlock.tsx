@@ -332,7 +332,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
         </div>
         <span className="flex-1" />
         {!readOnly && (
-          <>
+          <div className={`flex items-center gap-1.5 transition-opacity duration-150 ease-in group-hover/table:opacity-100 group-focus-within/table:opacity-100 has-[[aria-expanded=true]]:opacity-100 ${searching || query ? 'opacity-100' : 'opacity-0'}`}>
             {searching ? (
               <label className="flex h-7 items-center gap-1.5 rounded-md border border-neutral-300 px-2">
                 <Search size={14} className="shrink-0 text-neutral-500" />
@@ -365,10 +365,10 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
             <MenuButton label="View options" className={iconButton} groups={viewMenu()}>
               <MoreHorizontal size={16} />
             </MenuButton>
-            <button className="ml-1 inline-flex h-7 items-center gap-1 rounded-md bg-accent px-2.5 text-sm font-medium text-on-accent transition-colors duration-150 hover:bg-accent/90" onClick={() => addRow()}>
-              <Plus size={14} /> New Record
+            <button className="inline-flex items-center gap-1 rounded border border-neutral-200 px-2 py-1 text-sm leading-[22px] font-medium whitespace-nowrap text-neutral-900 transition-colors duration-200 hover:bg-neutral-100" onClick={() => addRow()}>
+              <Plus size={16} className="text-neutral-500" /> New Record
             </button>
-          </>
+          </div>
         )}
       </div>
       {view.type === 'table' && (

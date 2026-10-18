@@ -23,6 +23,13 @@ Body text at 15px. A paragraph with a [link](https://example.com) and \`code\`.
 const x = 1
 \`\`\`
 
+\`\`\`tasks
+| Task | Status | Tags |
+|---|---|---|
+| Write spec | Done | docs |
+| Build table | In progress | ui, table |
+\`\`\`
+
 \`\`\`datatable
 @schema {"title":"Untitled","types":["text","text","text"]}
 | Title | Column | Column 2 |

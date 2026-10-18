@@ -29,18 +29,24 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 
 /** The editable table for `tasks`; `commit` gets the new list after each edit. */
 function render(tasks: Task[], commit: (tasks: Task[]) => void) {
-  const root = el('div', 'tasks-widget my-3 overflow-hidden rounded-lg border border-neutral-200 text-sm')
+  const root = el('div', 'tasks-widget my-3 overflow-x-auto text-sm')
   root.contentEditable = 'false'
   const edit = (i: number, patch: Partial<Task>) => commit(tasks.map((t, j) => (j === i ? { ...t, ...patch } : t)))
 
-  const head = el('div', 'grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,12rem)_1.75rem] gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-500')
-  for (const label of ['Task', 'Status', 'Tags', '']) head.append(el('span', '', label))
+  // The same grid as the Data table: no frame, header and row lines, a divider between cells (34px rows).
+  const cell = (...children: HTMLElement[]) => {
+    const c = el('div', 'flex min-h-[34px] min-w-0 items-center border-r border-neutral-200 px-1.5 last:border-r-0')
+    c.append(...children)
+    return c
+  }
+  const head = el('div', 'grid min-w-[30rem] grid-cols-[minmax(8rem,1fr)_9rem_minmax(8rem,12rem)_2rem] border-y border-neutral-200 text-neutral-500')
+  for (const label of ['Task', 'Status', 'Tags', '']) head.append(cell(el('span', 'truncate', label)))
   root.append(head)
 
   tasks.forEach((task, i) => {
-    const row = el('div', 'tasks-row grid transition-colors duration-150 hover:bg-neutral-50 grid-cols-[minmax(0,1fr)_9rem_minmax(0,12rem)_1.75rem] items-center gap-2 border-b border-neutral-200 px-3 py-1.5')
+    const row = el('div', 'tasks-row grid min-w-[30rem] grid-cols-[minmax(8rem,1fr)_9rem_minmax(8rem,12rem)_2rem] border-b border-neutral-200 transition-colors duration-150 hover:bg-neutral-50')
 
-    const name = el('input', 'min-w-0 rounded bg-transparent px-1 py-0.5 outline-none hover:bg-neutral-100 focus:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-accent')
+    const name = el('input', 'min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 outline-none hover:bg-neutral-100 focus:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-accent')
     name.value = task.name
     name.placeholder = 'Task'
     name.setAttribute('aria-label', 'Task name')
@@ -57,7 +63,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     status.onclick = () =>
       openMenu(status, 'Status', [{ items: STATUSES.map((s) => ({ label: s, checked: s === task.status, onSelect: () => s !== task.status && edit(i, { status: s }) })) }])
 
-    const tags = el('div', 'flex min-w-0 flex-wrap items-center gap-1')
+    const tags = el('div', 'flex min-w-0 flex-1 flex-wrap items-center gap-1')
     for (const tag of task.tags) {
       const pill = el('span', 'inline-flex items-center gap-1 rounded bg-neutral-100 py-0.5 pr-1 pl-2 text-xs', tag)
       const x = el('button', 'print:hidden grid place-items-center rounded text-neutral-500 hover:text-neutral-900')
@@ -85,11 +91,11 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     del.title = 'Delete task'
     del.onclick = () => commit(tasks.filter((_, j) => j !== i))
 
-    row.append(name, status, tags, del)
+    row.append(cell(name), cell(status), cell(tags), cell(del))
     root.append(row)
   })
 
-  const addRow = el('button', 'print:hidden flex w-full items-center gap-1.5 px-3 py-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900')
+  const addRow = el('button', 'print:hidden flex h-[34px] w-full items-center gap-1.5 px-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900')
   addRow.innerHTML = `${icon(PLUS)} New task`
   addRow.onclick = () => commit([...tasks, { name: '', status: 'Not started', tags: [] }])
   root.append(addRow)
