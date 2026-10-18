@@ -12,7 +12,9 @@ const TABS = [
 ] as const
 
 // star (ticket 09), title, tags, created, updated
-const COLUMNS = 'grid-cols-[2rem_minmax(0,1fr)_minmax(0,10rem)_7rem_9rem]'
+// Narrow window: star, title, updated. Wide: tags and created join in.
+const COLUMNS = 'grid-cols-[2rem_minmax(0,1fr)_9rem] @3xl:grid-cols-[2rem_minmax(0,1fr)_minmax(0,10rem)_7rem_9rem]'
+const WIDE = 'hidden @3xl:block'
 
 const updatedLabel = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -37,7 +39,7 @@ export default function AllPagesPage({ entries, go, favorites, toggleFavorite }:
   const ariaSort = (key: SortKey) => (sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none')
 
   return (
-    <div className="mx-auto max-w-5xl px-16 pt-16 pb-32">
+    <div className="@container mx-auto max-w-5xl px-8 pt-16 pb-32 @3xl:px-16">
       <h1 className="mb-4 text-[40px] leading-tight font-bold tracking-[-0.02em]">All pages</h1>
       <div role="tablist" className="mb-4 flex gap-1">
         {TABS.map(([id, label]) => (
@@ -63,10 +65,10 @@ export default function AllPagesPage({ entries, go, favorites, toggleFavorite }:
             <span role="columnheader" aria-sort={ariaSort('title')}>
               {header('title', 'Title')}
             </span>
-            <span role="columnheader" className="text-xs font-medium text-neutral-500">
+            <span role="columnheader" className={`${WIDE} text-xs font-medium text-neutral-500`}>
               Tags
             </span>
-            <span role="columnheader" aria-sort={ariaSort('created')}>
+            <span role="columnheader" className={WIDE} aria-sort={ariaSort('created')}>
               {header('created', 'Created')}
             </span>
             <span role="columnheader" aria-sort={ariaSort('updated')}>
@@ -119,7 +121,7 @@ function Row({ row, go, starred, onStar }: { row: PageRow; go: (path: string) =>
           {row.preview && <span className="block truncate text-xs text-neutral-500">{row.preview}</span>}
         </span>
       </span>
-      <span role="cell" className="flex min-w-0 gap-1">
+      <span role="cell" className="hidden min-w-0 gap-1 @3xl:flex">
         {row.tags.slice(0, 2).map((t) => (
           <span key={t} className="truncate rounded bg-neutral-100 px-1.5 text-xs leading-5 text-neutral-700">
             {t}
@@ -127,7 +129,7 @@ function Row({ row, go, starred, onStar }: { row: PageRow; go: (path: string) =>
         ))}
         {row.tags.length > 2 && <span className="text-xs leading-5 text-neutral-500">+{row.tags.length - 2}</span>}
       </span>
-      <span role="cell" className="text-neutral-700 tabular-nums">
+      <span role="cell" className={`${WIDE} text-neutral-700 tabular-nums`}>
         {createdLabel(row)}
       </span>
       <span role="cell" className="text-neutral-700 tabular-nums">

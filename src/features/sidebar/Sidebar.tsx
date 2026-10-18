@@ -103,6 +103,20 @@ export default function Sidebar({ root, openToday, favorites, stored, loading, t
           {root.name}
         </div>
       )}
+      {root && (
+        <nav aria-label="Quick links" className="shrink-0 px-2 pb-1">
+          <button className={footerRow} onClick={openToday}>
+            <CalendarDays size={16} className="text-neutral-500" /> Today
+          </button>
+          <button
+            aria-current={props.page === '.all' ? 'page' : undefined}
+            className={`${footerRow} ${props.page === '.all' ? 'bg-accent-soft font-medium text-neutral-900' : ''}`}
+            onClick={() => props.go('.all')}
+          >
+            <LayoutList size={16} className="text-neutral-500" /> All pages
+          </button>
+        </nav>
+      )}
       {favorites.length > 0 && (
         <nav aria-label="Favorites" className="max-h-48 shrink-0 overflow-auto px-2 pb-1">
           <div className="px-2 pt-2 pb-1 text-xs font-medium text-neutral-500">Favorites</div>
@@ -144,16 +158,6 @@ export default function Sidebar({ root, openToday, favorites, stored, loading, t
         <button className={footerRow} onClick={pickFolder}>
           <FolderOpen size={16} className="text-neutral-500" /> {root ? 'Open another folder' : 'Open folder'}
         </button>
-        {root && (
-          <button className={footerRow} onClick={openToday}>
-            <CalendarDays size={16} className="text-neutral-500" /> Today
-          </button>
-        )}
-        {root && (
-          <button className={`${footerRow} ${props.page === '.all' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.all')}>
-            <LayoutList size={16} className="text-neutral-500" /> All pages
-          </button>
-        )}
         {root && (
           <button className={`${footerRow} ${props.page === '.trash' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.trash')}>
             <Trash2 size={16} className="text-neutral-500" /> Trash

@@ -371,7 +371,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
             placeholder="Title"
             autoFocus={focusTitle}
             onDone={(name) => name && name !== title && onRename(name)}
-            className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-400"
+            className="w-full rounded-md bg-transparent outline-none placeholder:text-neutral-500"
           />
         </h1>
       </div>
@@ -404,7 +404,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
                 <input
                   aria-label="Add tag"
                   placeholder="Add tag"
-                  className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-400"
+                  className="w-24 bg-transparent py-0.5 outline-none placeholder:text-neutral-500"
                   onKeyDown={(e) => {
                     const input = e.currentTarget
                     const tag = input.value.replace(/[,[\]"']/g, '').trim()
