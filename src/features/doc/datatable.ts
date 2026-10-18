@@ -144,10 +144,17 @@ export const viewsOf = (t: Table): View[] => t.views ?? [{ type: 'table' }]
 /** Columns a Kanban (Select) or Calendar (Date) view can use. */
 export const viewColumns = (t: Table, type: ViewType) => t.cols.flatMap((c, i) => (i >= 1 && type !== 'table' && kindOf(c) === VIEW_KIND[type] ? [i] : []))
 
-/** Adds a view on the first fitting column; unchanged when the table has none. */
+/** Adds a view on the first fitting column. A table with none gets one at the end first (Status for a Kanban, Date for a Calendar), like AFFiNE. */
 export function addView(t: Table, type: ViewType): Table {
+  if (type !== 'table' && !viewColumns(t, type).length) {
+    const taken = new Set(t.cols.map((c) => c.name))
+    let name = type === 'kanban' ? 'Status' : 'Date'
+    for (let i = 2; taken.has(name); i++) name = `${type === 'kanban' ? 'Status' : 'Date'} ${i}`
+    let col: Column = { name, type: type === 'kanban' ? 'select' : 'date' }
+    if (type === 'kanban') for (const o of ['Not started', 'In progress', 'Done']) col = addOptionTo(col, o)
+    t = insertColumn(t, t.cols.length, col)
+  }
   const groupBy = viewColumns(t, type)[0]
-  if (type !== 'table' && groupBy === undefined) return t
   return { ...t, views: [...viewsOf(t), type === 'table' ? { type } : { type, groupBy }] }
 }
 

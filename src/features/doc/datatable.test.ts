@@ -278,7 +278,18 @@ test('add, delete and set the column of a view', () => {
   const t = parseTable(SPRINT)
   expect(addView(t, 'kanban').views).toEqual([{ type: 'table' }, { type: 'kanban', groupBy: 1 }])
   expect(addView(t, 'calendar').views).toEqual([{ type: 'table' }, { type: 'calendar', groupBy: 2 }])
-  expect(addView(parseTable('| Title | A |\n|---|---|\n'), 'kanban').views).toBeUndefined() // no Select column
+  // No fitting column: the view brings its own (Status with three options / Date), once.
+  const bare = parseTable('| Title | A |\n|---|---|\n| x | y |\n')
+  const k = addView(bare, 'kanban')
+  expect(k.cols.map((c) => [c.name, c.type])).toEqual([['Title', 'title'], ['A', 'text'], ['Status', 'select']])
+  expect(k.cols[2].options?.map((o) => o.n)).toEqual(['Not started', 'In progress', 'Done'])
+  expect(k.rows).toEqual([['x', 'y', '']])
+  expect(k.views).toEqual([{ type: 'table' }, { type: 'kanban', groupBy: 2 }])
+  expect(addView(k, 'kanban').cols).toHaveLength(3) // reuses the Status column
+  const c = addView(bare, 'calendar')
+  expect(c.cols.map((x) => [x.name, x.type])).toEqual([['Title', 'title'], ['A', 'text'], ['Date', 'date']])
+  expect(c.views).toEqual([{ type: 'table' }, { type: 'calendar', groupBy: 2 }])
+  expect(addView(parseTable('| Title | Status |\n|---|---|\n'), 'kanban').cols.map((x) => x.name)).toEqual(['Title', 'Status', 'Status 2']) // a text "Status" is taken
   const b = parseTable(BOARD)
   expect(deleteView(b, 1).views).toEqual([{ type: 'table' }])
   expect(deleteView(deleteView(b, 1), 0).views).toEqual([{ type: 'table' }]) // never the last view

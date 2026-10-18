@@ -315,9 +315,8 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
               groups={[
                 {
                   items: (['table', 'kanban', 'calendar'] as const).map((type) => ({
-                    label: VIEW_INFO[type][0] + (type !== 'table' && !viewColumns(table, type).length ? ` (needs a ${type === 'kanban' ? 'Select' : 'Date'} column)` : ''),
+                    label: VIEW_INFO[type][0],
                     icon: VIEW_INFO[type][1],
-                    disabled: type !== 'table' && !viewColumns(table, type).length,
                     onSelect: () => {
                       update((t) => addView(t, type))
                       setViewIndex(views.length)
