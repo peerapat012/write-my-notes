@@ -1,0 +1,45 @@
+name: Release desktop app
+
+# Push a tag like v2.0.0: builds the unsigned Windows installers and attaches them to a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      # package.json and tauri.conf.json get the tag's version, so the installer, the app and the Release agree.
+      - run: node scripts/set-version.mjs ${{ github.ref_name }}
+      # No Gemini key anywhere: the app reads the user's own key from Settings, and production builds ignore VITE_GEMINI_API_KEY.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Notedflow ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: false
+          releaseBody: |
+            Windows installer for Notedflow (`.msi` and `.exe`). The app is not code-signed yet.
+
+            **Windows SmartScreen will warn when you open the installer** ("Windows protected your PC").
+            Click **More info**, then **Run anyway**. The warning is because the installer is unsigned, not because
+            anything was detected.
+
+            Add your own Gemini API key in Settings to use the AI features. Git features use the `git` already installed on your PC.
