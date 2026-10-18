@@ -17,20 +17,44 @@ export async function generate<T>(model: string, prompt: string, schema: object)
 /** Asks Gemini for plain (markdown) text, no response schema. */
 export const generateText = (model: string, prompt: string) => ask(model, prompt, {})
 
-async function ask(model: string, prompt: string, generationConfig: object): Promise<string> {
+async function post(model: string, body: object) {
   const key = geminiKey()
   if (!key) throw new Error(NO_KEY)
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig,
-    }),
+    body: JSON.stringify(body),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error?.message ?? `Gemini request failed (${res.status})`)
+  return json
+}
+
+async function ask(model: string, prompt: string, generationConfig: object): Promise<string> {
+  const json = await post(model, { contents: [{ parts: [{ text: prompt }] }], generationConfig })
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text
   if (!text) throw new Error('Gemini returned no answer.')
   return text
+}
+
+export type Part = {
+  text?: string
+  functionCall?: { name: string; args: Record<string, unknown> }
+  functionResponse?: { name: string; response: Record<string, unknown> }
+}
+export type Content = { role: 'user' | 'model'; parts: Part[] }
+
+/** A function the model may call: `parameters` is an OpenAPI-subset schema. */
+export type FunctionDeclaration = { name: string; description: string; parameters: object }
+
+/** One chat turn with function calling: the model's reply, which holds text and/or function calls. */
+export async function chatTurn(model: string, system: string, contents: Content[], functions: FunctionDeclaration[]): Promise<Content> {
+  const json = await post(model, {
+    systemInstruction: { parts: [{ text: system }] },
+    contents,
+    tools: [{ functionDeclarations: functions }],
+  })
+  const parts: Part[] | undefined = json.candidates?.[0]?.content?.parts
+  if (!parts?.length) throw new Error('Gemini returned no answer.')
+  return { role: 'model', parts }
 }

@@ -44,6 +44,7 @@ import { applyEdits, editTexts, selectedTexts } from '@/ai/edit'
 import { createContent, type Mode } from '@/ai/create'
 import { boundsOf, docsPrompt, placeRight } from '@/ai/docs'
 import { boardTexts, summarize, summaryDoc } from '@/ai/summarize'
+import type { BoardChat } from '@/features/chat/ChatTab'
 import AiPanel from './AiPanel'
 import DocCard from './DocCard'
 import DocPicker from './DocPicker'
@@ -59,7 +60,7 @@ import { panel } from '@/components/ui'
 import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { searchTexts, type BoardText } from '@/features/search/boardText'
 
-type Props = { docTexts: Map<string, string>; focusTitle: boolean; onIconChange: () => void; vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { chatRef: React.RefObject<BoardChat | undefined>; docTexts: Map<string, string>; focusTitle: boolean; onIconChange: () => void; vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -195,7 +196,7 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ chatRef, docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const onSaveRef = useRef(onSave) // read by the autosave, which outlives App re-renders
   useEffect(() => {
@@ -227,6 +228,11 @@ function Board({ docTexts, focusTitle, onIconChange, vault, zoomTo, onSave, open
       board.flush() // flush pending edits when leaving the page
     }
   }, [board])
+  // The chat tab asks this board to generate content.
+  useEffect(() => {
+    chatRef.current = { create }
+    return () => void (chatRef.current = undefined)
+  })
   // A search hit: zoom to its element once the scene is up (and again for a new hit on the open board).
   useEffect(() => {
     const el = ready && zoomTo && board.api()?.getSceneElements().find((e) => e.id === zoomTo.id)

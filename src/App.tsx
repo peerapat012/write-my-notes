@@ -1,5 +1,5 @@
 import { FileText, FolderOpen, PanelLeftOpen, PanelRightOpen, Presentation, Search } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Dialog from '@/components/Dialog'
 import TitleBar from '@/components/TitleBar'
 import RightPanel from '@/components/RightPanel'
@@ -30,6 +30,9 @@ import { fromTemplate, journal, toTemplate } from '@/features/templates/template
 import { splitFrontMatter } from '@/features/doc/frontmatter'
 import { dropFavorites, loadFavorites, moveFavorites, saveFavorites, toggleFavorite } from '@/features/favorites/favorites'
 import { backlinks } from '@/features/doc/backlinks'
+import ChatTab, { type BoardChat } from '@/features/chat/ChatTab'
+import { chatStore } from '@/ai/chatStore'
+import { pruneChats } from '@/ai/chat'
 import AllPagesPage from '@/features/allpages/AllPagesPage'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
@@ -63,6 +66,8 @@ export default function App() {
   const [favs, setFavs] = useState<string[]>([]) // favorite page paths of the open notes folder
   const [page, setPage] = useState(currentPage)
   const docTexts = useMemo(() => new Map(entries.flatMap((e) => (e.path.endsWith('.md') && e.text !== undefined ? [[e.path, e.text] as const] : []))), [entries]) // doc cards on boards show these
+  /** What the AI chat reads of a page: a doc's markdown, or a board's texts. */
+  const pageText = (path: string) => (path.endsWith('.md') ? docTexts.get(path) : entries.find((e) => e.path === path)?.boardTexts?.map((t) => t.text).join(' · '))
   // Pages that link to or embed the open doc.
   const linkedFrom = useMemo(
     () =>
@@ -103,6 +108,8 @@ export default function App() {
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
   const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
   const [outline, setOutline] = useState<Heading[]>([])
+  const [preview, setPreview] = useState<{ page: string; content: string }>() // an AI change shown read-only
+  const boardChat = useRef<BoardChat>(undefined) // the open board, for the chat tab
   const [viewing, setViewing] = useState<Viewing>() // an old version shown read-only in place of the page
   const [setup, setSetup] = useState(false) // git setup wizard
   const [historyRev, setHistoryRev] = useState(0) // bumped after versions are saved or pulled
@@ -179,6 +186,7 @@ export default function App() {
       setStored(stored) // re-granting needs a user gesture: show a reopen button
       setLoading(false)
     })
+    pruneChats(chatStore).catch(() => {}) // chats older than 7 days
     const onPop = () => setPage(currentPage())
     addEventListener('popstate', onPop)
     return () => removeEventListener('popstate', onPop)
@@ -241,6 +249,7 @@ export default function App() {
   }
 
   function go(path: string, elementId?: string) {
+    setPreview(undefined)
     setZoomTo(elementId ? { id: elementId } : undefined)
     history.pushState(null, '', pageUrl(path))
     setPage(path)
@@ -299,6 +308,31 @@ export default function App() {
   // Outline for docs; History (git) on the desktop for docs and boards. No tabs: no panel and no toggle.
   const tabs = [
     ...(page?.endsWith('.md') && !view ? [{ id: 'outline', label: 'Outline', content: <OutlineList headings={outline} /> }] : []),
+    ...(page && /\.(md|excalidraw)$/.test(page) && root
+      ? [
+          {
+            id: 'ai',
+            label: 'AI',
+            content: (
+              <ChatTab
+                vault={root}
+                page={page}
+                pages={[...exists].filter((p) => /\.(md|excalidraw)$/.test(p))}
+                pageText={pageText}
+                model={settings.model}
+                openSettings={() => setShowSettings(true)}
+                flush={() => Promise.all([...flushes].map((f) => f()))}
+                onChanged={async () => {
+                  await open(root)
+                  setRev((r) => r + 1)
+                }}
+                onPreview={(path, content) => setPreview({ page: path, content })}
+                board={boardChat}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(isTauri && page && /\.(md|excalidraw)$/.test(page)
       ? [{ id: 'history', label: 'History', content: <HistoryTab path={page} refreshKey={historyRev} viewing={view?.hash} onOpen={openVersion} onSetup={() => setSetup(true)} /> }]
       : []),
@@ -424,7 +458,9 @@ export default function App() {
         )}
         <div className="relative flex min-w-0 flex-1 print:block">
         <main className="min-w-0 flex-1 overflow-auto print:overflow-visible">
-          {root && view ? (
+          {root && preview ? (
+            <VersionView vault={root} dark={dark} view={{ page: preview.page, hash: 'ai-preview', date: new Date().toISOString(), content: preview.content }} label={`Preview of the AI’s version of ${preview.page}`} backLabel="Close preview" onBack={() => setPreview(undefined)} />
+          ) : root && view ? (
             <VersionView vault={root} dark={dark} view={view} onRestore={restoreVersion} onBack={() => setViewing(undefined)} />
           ) : root && page?.endsWith('.md') ? (
             <DocPage
@@ -444,7 +480,7 @@ export default function App() {
               linkedFrom={linkedFrom}
             />
           ) : root && page?.endsWith('.excalidraw') ? (
-            <BoardPage docTexts={docTexts} key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
+            <BoardPage chatRef={boardChat} docTexts={docTexts} key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
           ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
             <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
           ) : root && page === '.all' ? (
