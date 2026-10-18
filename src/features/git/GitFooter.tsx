@@ -18,12 +18,14 @@ type Props = {
   onSaved: () => void
   /** Advanced mode: opens the whole-repo history view. */
   openGraph: () => void
+  /** Git is missing or the folder is not a repo: opens the setup wizard. */
+  onSetup: () => void
 }
 
 type Notice = { title: string; detail: string; terminal: boolean }
 
 /** Desktop sidebar row: how many files changed in the notes folder's git repo, with Commit, Pull and Push. */
-export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved, openGraph }: Props) {
+export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved, openGraph, onSetup }: Props) {
   const [state, setState] = useState<GitState>()
   const [committing, setCommitting] = useState(false)
   const [busy, setBusy] = useState<'pull' | 'push'>()
@@ -69,10 +71,17 @@ export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved, 
   if (state.kind !== 'ok') {
     const message = state.kind === 'no-git' ? 'Git is not installed' : state.kind === 'no-repo' ? 'Not a git repository' : state.message
     return (
-      <p className={`${row} text-neutral-500`} title={message}>
+      <div className={row}>
         {icon}
-        <span className="truncate">{message}</span>
-      </p>
+        <span className="mr-auto truncate text-neutral-500" title={message}>
+          {message}
+        </span>
+        {(state.kind === 'no-git' || state.kind === 'no-repo') && (
+          <button className={`${ghostButton} h-6 shrink-0 px-2`} onClick={onSetup}>
+            Set up history
+          </button>
+        )}
+      </div>
     )
   }
   const n = state.changes.length

@@ -18,6 +18,7 @@ import type { BoardText } from '@/features/search/boardText'
 import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
+import SetupWizard from '@/features/git/SetupWizard'
 import GitFooter from '@/features/git/GitFooter'
 import HistoryTab from '@/features/history/HistoryTab'
 import VersionView, { type Viewing } from '@/features/history/VersionView'
@@ -65,6 +66,7 @@ export default function App() {
   const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
   const [outline, setOutline] = useState<Heading[]>([])
   const [viewing, setViewing] = useState<Viewing>() // an old version shown read-only in place of the page
+  const [setup, setSetup] = useState(false) // git setup wizard
   const [historyRev, setHistoryRev] = useState(0) // bumped after versions are saved or pulled
   const view = viewing?.page === page ? viewing : undefined
   const systemDark = useSyncExternalStore(subscribeDark, () => darkQuery.matches)
@@ -230,7 +232,7 @@ export default function App() {
   const tabs = [
     ...(page?.endsWith('.md') && !view ? [{ id: 'outline', label: 'Outline', content: <OutlineList headings={outline} /> }] : []),
     ...(isTauri && page && /\.(md|excalidraw)$/.test(page)
-      ? [{ id: 'history', label: 'History', content: <HistoryTab path={page} refreshKey={historyRev} viewing={view?.hash} onOpen={openVersion} /> }]
+      ? [{ id: 'history', label: 'History', content: <HistoryTab path={page} refreshKey={historyRev} viewing={view?.hash} onOpen={openVersion} onSetup={() => setSetup(true)} /> }]
       : []),
   ]
 
@@ -291,7 +293,7 @@ export default function App() {
             openSettings={() => setShowSettings(true)}
             openSearch={() => setShowSearch(true)}
             hide={toggleSidebar}
-            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} openGraph={() => go('.history')} /> : undefined}
+            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} openGraph={() => go('.history')} onSetup={() => setSetup(true)} /> : undefined}
           />
         ) : (
           <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
@@ -417,6 +419,15 @@ export default function App() {
               </button>
             </div>
           </Dialog>
+        )}
+        {setup && root && (
+          <SetupWizard
+            onClose={() => setSetup(false)}
+            onChanged={() => {
+              setHistoryRev((r) => r + 1)
+              open(root)
+            }}
+          />
         )}
         {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
       </div>

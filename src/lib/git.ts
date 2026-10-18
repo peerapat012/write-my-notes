@@ -56,6 +56,12 @@ async function run(...args: string[]) {
   if (r.code !== 0) return (r.stderr || r.stdout).trim() || `git ${args[0]} failed (exit ${r.code})`
 }
 
+export type SetupStep = 'git' | 'init' | 'remote' | 'done'
+
+/** The first setup step still to do: install git, turn on history (`git init`), connect a remote, or nothing. */
+export const setupStep = (gitFound: boolean, isRepo: boolean, hasRemote: boolean): SetupStep =>
+  !gitFound ? 'git' : !isRepo ? 'init' : hasRemote ? 'done' : 'remote'
+
 /** Simple mode's default message when the user types none. */
 export const autoMessage = (changed: number) => `Edited ${changed} ${changed === 1 ? 'page' : 'pages'}`
 
@@ -130,4 +136,17 @@ export function parseVersions(out: string, current: string): Version[] {
       if (line) last = unquote(line.split('\t').at(-1)!)
       return { hash, author, date, message, path: last }
     })
+}
+
+/** Turns on history in a folder that is not a repo: `git init`, then a first version of everything in it. */
+export async function turnOnHistory() {
+  await init()
+  const failure = await commitAll('First version')
+  if (failure) throw new Error(failure)
+}
+
+/** Adds `origin` (unless it already points at `url`) and pushes with upstream tracking. */
+export async function connectRemote(url: string) {
+  if ((await originUrl()) !== url) await addOrigin(url)
+  await pushUpstream()
 }

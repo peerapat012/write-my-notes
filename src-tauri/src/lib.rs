@@ -65,6 +65,14 @@ fn allowed(args: &[String]) -> bool {
     }
 }
 
+/// Opens the Git for Windows download page in the default browser. The URL is fixed: the webview picks nothing.
+#[tauri::command]
+fn open_git_download() -> Result<(), String> {
+    const URL: &str = "https://git-scm.com/download/win";
+    let program = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    Command::new(program).arg(URL).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Runs the system `git` in the notes folder and returns its exit code, stdout and stderr.
 #[tauri::command]
 async fn git(vault: State<'_, Vault>, args: Vec<String>) -> Result<GitOutput, String> {
@@ -98,7 +106,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Vault::default())
-        .invoke_handler(tauri::generate_handler![allow_vault, git])
+        .invoke_handler(tauri::generate_handler![allow_vault, git, open_git_download])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

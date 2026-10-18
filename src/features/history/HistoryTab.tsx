@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ghostButton } from '@/components/ui'
+import { ghostButton, secondaryButton } from '@/components/ui'
 import { versionDate } from './versionDate'
 import { fileLog, gitState, parseVersions, type Version } from '@/lib/git'
 
@@ -14,12 +14,14 @@ type Props = {
   /** Hash of the version shown in the page area, if any. */
   viewing?: string
   onOpen: (version: Version) => void
+  /** Git is missing or the folder is not a repo: opens the setup wizard. */
+  onSetup: () => void
 }
 
 type Load = { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'error'; message: string } | { kind: 'ok'; versions: Version[]; more: boolean }
 
 /** Right panel tab (desktop): the versions of the open page, newest first. */
-export default function HistoryTab({ path, refreshKey, viewing, onOpen }: Props) {
+export default function HistoryTab({ path, refreshKey, viewing, onOpen, onSetup }: Props) {
   const [load, setLoad] = useState<Load>({ kind: 'loading' })
   const [loadingMore, setLoadingMore] = useState(false)
 
@@ -54,8 +56,15 @@ export default function HistoryTab({ path, refreshKey, viewing, onOpen }: Props)
 
   const note = 'px-2 py-1 text-neutral-500'
   if (load.kind === 'loading') return <p className={note}>Loading…</p>
-  // ticket 06 puts the "Set up history" button here
-  if (load.kind === 'unavailable') return <p className={note}>{load.message}</p>
+  if (load.kind === 'unavailable')
+    return (
+      <div className="px-2 py-1">
+        <p className="text-neutral-500">{load.message}</p>
+        <button className={`${secondaryButton} mt-2`} onClick={onSetup}>
+          Set up history
+        </button>
+      </div>
+    )
   if (load.kind === 'error')
     return (
       <p role="alert" className="px-2 py-1 text-danger">

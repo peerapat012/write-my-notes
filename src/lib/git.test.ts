@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { autoMessage, parseStatus, parseVersions } from './git'
+import { autoMessage, parseStatus, parseVersions, setupStep } from './git'
 
 test('modified, added, deleted and untracked files', () => {
   const out = ' M notes/a.md\nA  b.md\n D gone.md\n?? new page.md\n?? assets/\n'
@@ -44,4 +44,11 @@ test('versions carry the file path at each commit, across a rename', () => {
     { hash: 'aaa', author: 'Bob', date: '2026-10-01T10:00:00+07:00', message: 'First', path: 'ก.md' },
   ])
   expect(parseVersions('', 'a.md')).toEqual([])
+})
+
+test('setup step: first thing still missing', () => {
+  expect(setupStep(false, false, false)).toBe('git')
+  expect(setupStep(true, false, false)).toBe('init')
+  expect(setupStep(true, true, false)).toBe('remote')
+  expect(setupStep(true, true, true)).toBe('done')
 })
