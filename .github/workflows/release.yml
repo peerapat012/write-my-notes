@@ -1,6 +1,6 @@
 name: Release desktop app
 
-# Push a tag like v2.0.0: builds the unsigned Windows installers and attaches them to a GitHub Release.
+# Push a tag like v2.0.0 (or v0.0.1-beta for a pre-release): builds the unsigned Windows installers and attaches them to a GitHub Release.
 on:
   push:
     tags: ['v*']
@@ -34,7 +34,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Notedflow ${{ github.ref_name }}
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           releaseBody: |
             Windows installer for Notedflow (`.msi` and `.exe`). The app is not code-signed yet.
 

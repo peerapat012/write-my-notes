@@ -1,10 +1,10 @@
-// Usage: node scripts/set-version.mjs 2.0.0 — writes the version into package.json and src-tauri/tauri.conf.json (the installer's version).
+// Usage: node scripts/set-version.mjs v0.0.1-beta — writes the version into package.json and src-tauri/tauri.conf.json (the installer's version).
+// A pre-release suffix (-beta, -rc1) stays on the tag and the GitHub Release; the files get the plain numbers, because MSI needs a numeric version.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const version = process.argv[2]?.replace(/^v/, '')
-// MSI needs a plain numeric version, so a tag like v2.0.0-rc1 is refused here instead of failing deep in the bundler.
+const version = process.argv[2]?.replace(/^v/, '').replace(/-[0-9A-Za-z.-]+$/, '')
 if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) {
-  console.error(`Expected a version like 2.0.0 (or v2.0.0), got "${process.argv[2] ?? ''}"`)
+  console.error(`Expected a version like 2.0.0, v2.0.0 or v0.0.1-beta, got "${process.argv[2] ?? ''}"`)
   process.exit(1)
 }
 
