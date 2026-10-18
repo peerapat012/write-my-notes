@@ -12,6 +12,7 @@ import {
   CircleChevronDown,
   Copy,
   FileText,
+  Gauge,
   GripVertical,
   Hash,
   Link,
@@ -43,6 +44,7 @@ import {
   addOption,
   canMove,
   CHECKED,
+  clampProgress,
   columnEmpty,
   DEFAULT_COL_WIDTH,
   deleteColumn,
@@ -58,6 +60,7 @@ import {
   MIN_COL_WIDTH,
   moveColumn,
   pageLinks,
+  progressValue,
   parseTable,
   recolorOption,
   removeOption,
@@ -84,6 +87,7 @@ import {
 const TYPE_INFO: Record<ColType, [string, LucideIcon]> = {
   text: ['Text', Type],
   number: ['Number', Hash],
+  progress: ['Progress', Gauge],
   select: ['Select', CircleChevronDown],
   'multi-select': ['Multi-select', ListChecks],
   checkbox: ['Checkbox', SquareCheck],
@@ -606,7 +610,7 @@ function ColumnHeader({ label, col, groups, onRename, children }: { label: strin
   )
 }
 
-const pill = 'inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-xs font-medium text-neutral-900'
+const pill = 'inline-flex max-w-full items-center truncate rounded-[4px] px-2 py-px text-xs font-medium text-neutral-900'
 const pillStyle = (color = 'gray') => ({ background: `color-mix(in srgb, var(--icon-${color}) 22%, transparent)` })
 
 function Pill({ name, col }: { name: string; col: Column }) {
@@ -670,6 +674,15 @@ function Cell({ t, r, c, update, docPath, readOnly }: CellProps) {
       </>
     )
   else if (kind === 'number') shown = <span className="ml-auto tabular-nums">{value}</span>
+  else if (kind === 'progress')
+    shown = (
+      <span className="flex w-full items-center gap-2">
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressValue(value)}>
+          <span className="block h-full rounded-full bg-accent" style={{ width: `${progressValue(value)}%` }} />
+        </span>
+        <span className="w-9 text-right text-xs text-neutral-700 tabular-nums">{progressValue(value)}%</span>
+      </span>
+    )
   else if (kind === 'checkbox')
     shown = (
       <input
@@ -703,6 +716,7 @@ function Cell({ t, r, c, update, docPath, readOnly }: CellProps) {
   else
     shown = (
       <span className="min-w-0 break-words">
+        {c === 0 && <Type size={14} className="mr-1.5 inline shrink-0 align-[-2px] text-neutral-400" />}
         <LinkedText text={value} docPath={docPath} />
       </span>
     )
@@ -756,9 +770,9 @@ function Cell({ t, r, c, update, docPath, readOnly }: CellProps) {
             autoFocus
             aria-label={col.name}
             value={value}
-            inputMode={kind === 'number' ? 'decimal' : undefined}
-            className={`h-6 w-full min-w-0 bg-transparent text-sm outline-none ${kind === 'number' ? 'text-right' : ''}`}
-            onCommit={set}
+            inputMode={kind === 'number' || kind === 'progress' ? 'decimal' : undefined}
+            className={`h-6 w-full min-w-0 bg-transparent text-sm outline-none ${kind === 'number' || kind === 'progress' ? 'text-right' : ''}`}
+            onCommit={kind === 'progress' ? (v) => set(clampProgress(v)) : set}
             onCancel={stop}
             onBlur={() => !picker && setEditing(false)}
             onKeyDown={(e) => {

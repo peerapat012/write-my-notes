@@ -26,6 +26,8 @@ import {
   setCell,
   setColumnType,
   setColumnWidth,
+  clampProgress,
+  progressValue,
   MIN_COL_WIDTH,
   sortedRows,
   splitMulti,
@@ -213,4 +215,22 @@ test('column width `w`: round trip, missing, invalid ignored, clamped', () => {
   // a column keeps its width when moved
   expect(moveColumn(t, 1, 1).cols[2].w).toBeUndefined()
   expect(moveColumn(t, 1, 1).cols[1].w).toBe(150)
+})
+
+test('progress column: round trip, clamp 0-100, non-number kept', () => {
+  const src = '@schema {"types":["progress"],"summary":{"1":"avg"}}\n| Title | Done |\n|---|---|\n| a | 40 |\n| b | 150 |\n| c | soon |'
+  const t = parseTable(src)
+  expect(kindOf(t.cols[1])).toBe('progress')
+  expect(parseTable(serializeTable(t))).toEqual(t)
+  expect(serializeTable(t)).toContain('"types":["progress"]')
+  expect(clampProgress('150')).toBe('100')
+  expect(clampProgress('-3')).toBe('0')
+  expect(clampProgress(' 42.4 ')).toBe('42.4')
+  expect(clampProgress('soon')).toBe('soon')
+  expect(clampProgress('')).toBe('')
+  expect(fits(t.cols[1], '40')).toBe(true)
+  expect(fits(t.cols[1], 'soon')).toBe(false)
+  expect(progressValue('150')).toBe(100)
+  expect(progressValue('soon')).toBe(0)
+  expect(summaryText(t, 1)).toBe('AVERAGE 95') // (40 + 150) / 2: the file keeps what was written
 })

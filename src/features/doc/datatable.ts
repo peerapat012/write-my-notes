@@ -3,7 +3,7 @@ import { cell, cells } from './tasks'
 
 // A ```datatable block: one `@schema {json}` line, then a GFM table whose first column is Title.
 
-export const TYPES = ['text', 'number', 'select', 'multi-select', 'checkbox', 'date', 'link', 'page'] as const
+export const TYPES = ['text', 'number', 'progress', 'select', 'multi-select', 'checkbox', 'date', 'link', 'page'] as const
 export type ColType = (typeof TYPES)[number]
 export type Option = { n: string; c: string } // name, color from the icon palette
 /** `type` is kept as written: an unknown type works as Text until the column is retyped. Column 0 is Title. */
@@ -215,6 +215,10 @@ export const joinMulti = (values: string[]) => values.join(', ')
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 /** `YYYY-MM-DD` of a real day (no 2026-02-30). */
 export const validDate = (v: string) => DATE.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v
+/** A progress cell's number held to 0-100; other text is kept as written. */
+export const clampProgress = (v: string) => (validNumber(v) ? String(Math.min(100, Math.max(0, Number(v)))) : v.trim() ? v : '')
+/** The bar fill (0-100) of a progress cell; text that is not a number draws an empty bar. */
+export const progressValue = (v: string) => (validNumber(v) ? Math.min(100, Math.max(0, Number(v))) : 0)
 export const validNumber = (v: string) => v.trim() !== '' && Number.isFinite(Number(v))
 
 /** Page links in a cell: `[Title](path.md)` entries joined by `, `. */
@@ -229,6 +233,7 @@ export function fits(col: Column, v: string) {
   const names = new Set(col.options?.map((o) => o.n))
   switch (kindOf(col)) {
     case 'number':
+    case 'progress':
       return validNumber(v)
     case 'date':
       return validDate(v)
@@ -262,7 +267,7 @@ export function sortedRows(t: Table) {
     const y = t.rows[b][col]
     if (empty(x) || empty(y)) return empty(x) === empty(y) ? a - b : empty(x) ? 1 : -1
     let d: number
-    if (kind === 'number' && validNumber(x) && validNumber(y)) d = Number(x) - Number(y)
+    if ((kind === 'number' || kind === 'progress') && validNumber(x) && validNumber(y)) d = Number(x) - Number(y)
     else if (kind === 'checkbox') d = Number(isChecked(x)) - Number(isChecked(y))
     else d = key(x).localeCompare(key(y), undefined, { numeric: true, sensitivity: 'base' })
     return (dir === 'asc' ? d : -d) || a - b
@@ -288,7 +293,7 @@ export const SUMMARY_LABELS: Record<string, string> = {
 
 const BASE = ['none', 'count', 'empty', 'filled', 'empty%', 'filled%']
 export const summariesFor = (type: string) =>
-  type === 'number' ? [...BASE, 'sum', 'avg', 'min', 'max'] : type === 'checkbox' ? [...BASE, 'checked', 'checked%'] : BASE
+  type === 'number' || type === 'progress' ? [...BASE, 'sum', 'avg', 'min', 'max'] : type === 'checkbox' ? [...BASE, 'checked', 'checked%'] : BASE
 
 const SHORT: Record<string, string> = { count: 'COUNT', empty: 'EMPTY', filled: 'FILLED', 'empty%': 'EMPTY', 'filled%': 'FILLED', sum: 'SUM', avg: 'AVERAGE', min: 'MIN', max: 'MAX', checked: 'CHECKED', 'checked%': 'CHECKED' }
 
@@ -322,9 +327,9 @@ export function summaryText(t: Table, i: number) {
 }
 
 /** Dev sheet sample (/dev/ui): every column type, so the grid can be checked by eye. */
-export const SAMPLE_TABLE = `@schema {"title":"Sprint","types":["select","date","checkbox","number","link"],"options":{"1":[{"n":"Not started","c":"gray"},{"n":"Done","c":"green"}]},"summary":{"1":"empty%"}}
-| Title | Status | Due | Done | Points | Site |
-|---|---|---|---|---|---|
-| Write the spec | Done | 2026-10-20 | [x] | 3 | https://example.com |
-| Review | Not started |  | [ ] | 5 |  |
-|  |  |  | [ ] |  |  |`
+export const SAMPLE_TABLE = `@schema {"title":"Sprint","types":["select","date","checkbox","number","link","progress"],"options":{"1":[{"n":"Not started","c":"gray"},{"n":"Done","c":"green"}]},"summary":{"1":"empty%"}}
+| Title | Status | Due | Done | Points | Site | Progress |
+|---|---|---|---|---|---|---|
+| Write the spec | Done | 2026-10-20 | [x] | 3 | https://example.com | 100 |
+| Review | Not started |  | [ ] | 5 |  | 40 |
+|  |  |  | [ ] |  |  |  |`
