@@ -11,7 +11,7 @@ import DocPage from '@/features/doc/DocPage'
 import OutlineList from '@/features/doc/OutlineList'
 import type { Heading } from '@/features/doc/outline'
 import { createdStamp, dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
-import { movedPath } from '@/lib/links'
+import { linkTargets, movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf, untitledName } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
 import type { BoardText } from '@/features/search/boardText'
@@ -29,6 +29,7 @@ import TemplatePicker from '@/features/templates/TemplatePicker'
 import { fromTemplate, journal, toTemplate } from '@/features/templates/templates'
 import { splitFrontMatter } from '@/features/doc/frontmatter'
 import { dropFavorites, loadFavorites, moveFavorites, saveFavorites, toggleFavorite } from '@/features/favorites/favorites'
+import { backlinks } from '@/features/doc/backlinks'
 import AllPagesPage from '@/features/allpages/AllPagesPage'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
@@ -61,6 +62,19 @@ export default function App() {
   const icons = useMemo(() => new Map(entries.map((e) => [e.path, { icon: e.icon, iconColor: e.iconColor }])), [entries])
   const [favs, setFavs] = useState<string[]>([]) // favorite page paths of the open notes folder
   const [page, setPage] = useState(currentPage)
+  // Pages that link to or embed the open doc.
+  const linkedFrom = useMemo(
+    () =>
+      page?.endsWith('.md')
+        ? backlinks(page, entries).map((path) => ({
+            path,
+            title: path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, ''),
+            icon: icons.get(path)?.icon,
+            iconColor: icons.get(path)?.iconColor,
+          }))
+        : [],
+    [page, entries, icons],
+  )
   const favSet = useMemo(() => new Set(favs), [favs])
   // Starred pages that still exist, in the order added.
   const favorites = useMemo(
@@ -421,11 +435,12 @@ export default function App() {
               go={go}
               onRename={(name) => rename(page, name)}
               onIconChange={() => open(root)}
-              onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text, mtime: Date.now() } : e)))}
+              onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text, mtime: Date.now(), links: linkTargets(e.path, text) } : e)))}
               onHeadings={setOutline}
               model={settings.model}
               openSettings={() => setShowSettings(true)}
               focusTitle={fresh === page}
+              linkedFrom={linkedFrom}
             />
           ) : root && page?.endsWith('.excalidraw') ? (
             <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />

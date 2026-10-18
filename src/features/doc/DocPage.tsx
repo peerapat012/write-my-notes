@@ -8,7 +8,7 @@ import { getMarkdown, replaceAll, replaceRange } from '@milkdown/kit/utils'
 import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
-import { CalendarClock, ChevronRight, Code, Copy, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Code, Copy, FileText, Presentation, Heading1, Heading2, Heading3, List, ListOrdered, ListTodo, Pilcrow, Quote, SmilePlus, Tag, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import ConflictDialog from '@/components/ConflictDialog'
 import IconPicker from '@/components/IconPicker'
@@ -89,14 +89,16 @@ type Props = {
   model: string // Gemini model for `/ai`
   openSettings: () => void
   focusTitle: boolean // a page just created: the title takes focus
+  linkedFrom: { path: string; title: string; icon?: string; iconColor?: string }[] // pages that link here
 }
 
-export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, onHeadings, model, openSettings, focusTitle }: Props) {
+export default function DocPage({ vault, dark, path, exists, go, onRename, onIconChange, onSave, onHeadings, model, openSettings, focusTitle, linkedFrom }: Props) {
   const mount = useRef<HTMLDivElement>(null)
   const save = useRef<(patch?: (front: string) => string) => Promise<void>>(async () => {})
   const [icon, setIconState] = useState<string>()
   const [iconColor, setIconColor] = useState<string>()
   const [picker, setPicker] = useState<DOMRect>() // icon picker popover
+  const [linksOpen, setLinksOpen] = useState(true) // the Linked from section
   const [templates, setTemplates] = useState(false) // template picker, opened from the Start row
   const [empty, setEmpty] = useState(false) // no text yet: the Add icon link stays visible
   const [info, setInfo] = useState(() => localStorage.getItem(INFO_KEY) === 'open')
@@ -447,6 +449,33 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
             Template
           </button>
         </p>
+      )}
+      {linkedFrom.length > 0 && (
+        <section aria-label="Linked from" className="mt-10 border-t border-neutral-200 pt-3 text-sm print:hidden">
+          <button
+            aria-expanded={linksOpen}
+            className="-ml-1.5 flex h-7 items-center gap-1 rounded-md px-1.5 text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
+            onClick={() => setLinksOpen((o) => !o)}
+          >
+            <ChevronRight size={14} className={`transition-transform duration-150 ${linksOpen ? 'rotate-90' : ''}`} /> Linked from
+            <span className="tabular-nums">({linkedFrom.length})</span>
+          </button>
+          {linksOpen && (
+            <ul className="mt-1">
+              {linkedFrom.map((l) => (
+                <li key={l.path}>
+                  <button
+                    className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-neutral-700 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
+                    onClick={() => go(l.path)}
+                  >
+                    <PageIcon icon={l.icon} color={l.iconColor} fallback={l.path.endsWith('.md') ? FileText : Presentation} />
+                    <span className="truncate">{l.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
       {templates && (
         <TemplatePicker

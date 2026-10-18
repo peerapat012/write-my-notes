@@ -55,3 +55,10 @@ export function brokenLinks(path: string, text: string, exists: Set<string>) {
   mapLinks(path, text, (target) => void (exists.has(target) || out.push(target)))
   return out
 }
+
+/** Root-relative targets of the relative links in page `path` (docs: links and images; boards: image files and doc cards). */
+export function linkTargets(path: string, text: string) {
+  const out = new Set<string>()
+  mapLinks(path, text, (target) => void out.add(target))
+  return [...out]
+}

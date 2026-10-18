@@ -1,5 +1,5 @@
 import { fileSearchTexts } from '@/features/search/boardText'
-import { movedPath, rewriteLinks } from './links'
+import { linkTargets, movedPath, rewriteLinks } from './links'
 import { parseIcon, parseIconColor, type Entry } from '@/features/sidebar/tree'
 import { restorePath, templateNames, topLevel, trashedPages, trashPaths } from './trash'
 
@@ -93,7 +93,7 @@ async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): Promise
       // ponytail: reads every page on open; fine for personal-size folders, cache by lastModified if slow.
       const file = await handle.getFile()
       const text = await file.text()
-      out.push({ path, kind: 'file', mtime: file.lastModified, icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
+      out.push({ path, kind: 'file', mtime: file.lastModified, icon: parseIcon(name, text), iconColor: parseIconColor(name, text), links: linkTargets(path, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }
