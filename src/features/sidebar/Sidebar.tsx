@@ -1,14 +1,17 @@
 import {
+  CalendarDays,
   ChevronRight,
   FileText,
   Folder,
   FolderOpen,
   LayoutList,
+  LayoutTemplate,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
   Plus,
   Presentation,
+  Printer,
   RotateCcw,
   Search,
   Star,
@@ -31,6 +34,10 @@ type Remove = (node: TreeNode) => void
 
 type SidebarProps = {
   root?: Vault
+  createFromTemplate: (dir: string) => void // opens the template picker
+  saveTemplate: (node: TreeNode) => void
+  print: () => void
+  openToday: () => void
   favorites: TreeNode[] // starred pages, in the order added
   favoriteSet: Set<string>
   toggleFavorite: (path: string) => void
@@ -50,11 +57,12 @@ type SidebarProps = {
   git?: ReactNode // desktop-only git status row, above the folder and settings rows
 }
 
-const newPage = (create: Create, dir: string): MenuGroup[] => [
+const newPage = (create: Create, dir: string, fromTemplate: (dir: string) => void): MenuGroup[] => [
   {
     items: [
       { label: 'New doc', icon: FileText, onSelect: () => create(dir, 'doc') },
       { label: 'New board', icon: Presentation, onSelect: () => create(dir, 'board') },
+      { label: 'New from template', icon: LayoutTemplate, onSelect: () => fromTemplate(dir) },
     ],
   },
 ]
@@ -62,7 +70,7 @@ const newPage = (create: Create, dir: string): MenuGroup[] => [
 const footerRow =
   'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-neutral-700 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900'
 
-export default function Sidebar({ root, favorites, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
+export default function Sidebar({ root, openToday, favorites, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
   const { create, move } = props
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
@@ -76,7 +84,7 @@ export default function Sidebar({ root, favorites, stored, loading, tree, reopen
             <button className={iconButton} title="Search (Ctrl+K)" aria-label="Search" onClick={openSearch}>
               <Search size={16} />
             </button>
-            <MenuButton label="New page" groups={newPage(create, '')} className={iconButton}>
+            <MenuButton label="New page" groups={newPage(create, '', props.createFromTemplate)} className={iconButton}>
               <SquarePen size={16} />
             </MenuButton>
           </>
@@ -137,6 +145,11 @@ export default function Sidebar({ root, favorites, stored, loading, tree, reopen
           <FolderOpen size={16} className="text-neutral-500" /> {root ? 'Open another folder' : 'Open folder'}
         </button>
         {root && (
+          <button className={footerRow} onClick={openToday}>
+            <CalendarDays size={16} className="text-neutral-500" /> Today
+          </button>
+        )}
+        {root && (
           <button className={`${footerRow} ${props.page === '.all' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.all')}>
             <LayoutList size={16} className="text-neutral-500" /> All pages
           </button>
@@ -155,6 +168,9 @@ export default function Sidebar({ root, favorites, stored, loading, tree, reopen
 }
 
 type TreeProps = {
+  createFromTemplate: (dir: string) => void
+  saveTemplate: (node: TreeNode) => void
+  print: () => void
   favoriteSet: Set<string>
   toggleFavorite: (path: string) => void
   nodes: TreeNode[]
@@ -265,6 +281,16 @@ function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'n
                 ...(isPage
                   ? [{ items: [{ label: favoriteSet.has(node.path) ? 'Remove from favorites' : 'Add to favorites', icon: Star, onSelect: () => toggleFavorite(node.path) }] }]
                   : []),
+                ...(node.type === 'doc'
+                  ? [
+                      {
+                        items: [
+                          { label: 'Save as template', icon: LayoutTemplate, onSelect: () => props.saveTemplate(node) },
+                          ...(active ? [{ label: 'Print / Save as PDF', icon: Printer, onSelect: () => props.print() }] : []),
+                        ],
+                      },
+                    ]
+                  : []),
                 { items: [{ label: 'Rename', icon: Pencil, onSelect: () => setEditing(true) }] },
                 { items: [{ label: 'Delete', icon: Trash2, onSelect: () => remove(node) }] },
               ]}
@@ -272,7 +298,7 @@ function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'n
             >
               <MoreHorizontal size={15} />
             </MenuButton>
-            <MenuButton label={`Add inside ${node.name}`} groups={newPage(create, childDir)} className={`${iconButton} size-6 hover:bg-neutral-200`}>
+            <MenuButton label={`Add inside ${node.name}`} groups={newPage(create, childDir, props.createFromTemplate)} className={`${iconButton} size-6 hover:bg-neutral-200`}>
               <Plus size={15} />
             </MenuButton>
           </span>

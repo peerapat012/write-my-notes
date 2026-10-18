@@ -41,3 +41,10 @@ export async function restorePath(io: Io, path: string) {
 
 /** Original paths of the pages in the trash. */
 export const trashedPages = (entries: Entry[]) => entries.filter((e) => e.kind === 'file' && ext(e.path)).map((e) => e.path)
+
+/** Names (without `.md`) of the docs directly inside `.templates/`; `entries` are relative to that folder. */
+export const templateNames = (entries: Entry[]) =>
+  entries
+    .filter((e) => e.kind === 'file' && e.path.endsWith('.md') && !e.path.includes('/'))
+    .map((e) => e.path.slice(0, -3))
+    .sort((a, b) => a.localeCompare(b))

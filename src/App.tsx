@@ -10,7 +10,7 @@ import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
 import OutlineList from '@/features/doc/OutlineList'
 import type { Heading } from '@/features/doc/outline'
-import { dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
+import { createdStamp, dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf, untitledName } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
@@ -24,6 +24,10 @@ import HistoryTab from '@/features/history/HistoryTab'
 import VersionView, { type Viewing } from '@/features/history/VersionView'
 import { showFile, type Version } from '@/lib/git'
 import GraphPage from '@/features/history/GraphPage'
+import { dailyPath, localDate } from '@/features/templates/daily'
+import TemplatePicker from '@/features/templates/TemplatePicker'
+import { fromTemplate, journal, toTemplate } from '@/features/templates/templates'
+import { splitFrontMatter } from '@/features/doc/frontmatter'
 import { dropFavorites, loadFavorites, moveFavorites, saveFavorites, toggleFavorite } from '@/features/favorites/favorites'
 import AllPagesPage from '@/features/allpages/AllPagesPage'
 import TrashPage from '@/features/trash/TrashPage'
@@ -78,6 +82,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false)
   const [deleting, setDeleting] = useState<TreeNode>() // delete confirmation dialog
   const deletingPages = deleting && deletion(deleting).childPages
+  const [templateDir, setTemplateDir] = useState<string>() // folder for a doc made from a template: the picker is open
   const [fresh, setFresh] = useState<string>() // a page just created: its title takes focus
   const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
@@ -276,6 +281,48 @@ export default function App() {
     go(path)
   }
 
+  /** Creates `Untitled` in `dir` from a template body and opens it. */
+  async function createFromTemplate(dir: string, body: string) {
+    setTemplateDir(undefined)
+    if (!root) return
+    const path = await root.createPage(dir, untitledName(exists, dir, '.md'), 'doc')
+    await root.write(path, fromTemplate(body, createdStamp(), localDate()))
+    await open(root)
+    setFresh(path)
+    go(path)
+  }
+
+  /** Writes a doc's body (without `created`) to `.templates/<name>.md`, asking before it replaces one. */
+  async function saveAsTemplate(node: TreeNode) {
+    if (!root) return
+    try {
+      await Promise.all([...flushes].map((f) => f()))
+      const body = toTemplate(await root.read(node.path))
+      const taken = (await root.listTemplates()).includes(node.name)
+      if (taken && !confirm(`Replace the template “${node.name}”?`)) return
+      if (!taken) await root.createPage('.templates', node.name, 'doc')
+      await root.write(`.templates/${node.name}.md`, body)
+    } catch (e) {
+      alert(`Could not save the template: ${e}`)
+    }
+  }
+
+  /** Opens today's note, creating `Daily/YYYY-MM-DD.md` from the Journal template when there is none. */
+  async function openToday() {
+    if (!root) return
+    const path = dailyPath()
+    try {
+      if (!exists.has(path)) {
+        await root.createPage('Daily', localDate(), 'doc') // keeps a file that is already there
+        if (!splitFrontMatter(await root.read(path)).body.trim()) await root.write(path, fromTemplate(journal.body, createdStamp(), localDate()))
+        await open(root)
+      }
+      go(path)
+    } catch (e) {
+      alert(`Could not open today’s note: ${e}`)
+    }
+  }
+
   /** Creates `<board> summary.md` next to the board (never overwriting one), fills it, and opens it. */
   async function saveSummary(board: string, body: string) {
     if (!root) return
@@ -307,6 +354,10 @@ export default function App() {
         {sidebar ? (
           <Sidebar
             root={root}
+            createFromTemplate={setTemplateDir}
+            saveTemplate={saveAsTemplate}
+            print={() => print()}
+            openToday={openToday}
             favorites={favorites}
             favoriteSet={favSet}
             toggleFavorite={(path) => updateFavs((f) => toggleFavorite(f, path))}
@@ -405,6 +456,7 @@ export default function App() {
           ))}
         </div>
         {showSearch && root && <SearchPalette index={index} icons={icons} go={go} onClose={() => setShowSearch(false)} />}
+        {templateDir !== undefined && root && <TemplatePicker vault={root} onPick={(body) => createFromTemplate(templateDir, body)} onClose={() => setTemplateDir(undefined)} />}
         {deleting && (
           <Dialog aria-label={`Move ${deleting.name} to Trash`} onClose={() => setDeleting(undefined)}>
             <h2 className="font-semibold">Move “{deleting.name}” to Trash?</h2>

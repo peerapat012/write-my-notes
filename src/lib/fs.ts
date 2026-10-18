@@ -1,7 +1,7 @@
 import { fileSearchTexts } from '@/features/search/boardText'
 import { movedPath, rewriteLinks } from './links'
 import { parseIcon, parseIconColor, type Entry } from '@/features/sidebar/tree'
-import { restorePath, topLevel, trashedPages, trashPaths } from './trash'
+import { restorePath, templateNames, topLevel, trashedPages, trashPaths } from './trash'
 
 // Chromium-only File System Access bits missing from lib.dom.
 declare global {
@@ -36,6 +36,8 @@ export interface Vault {
   listTrash(): Promise<string[]>
   /** Moves a trashed page and its child folder back; adds " (restored)" if the path is taken. Returns the new path. */
   restore(path: string): Promise<string>
+  /** Names of the user templates: the `.md` files in `.templates/`. */
+  listTemplates(): Promise<string[]>
   /** Writes an image to `assets/img-<id>.<ext>` and returns that root-relative path. */
   saveAsset(image: Blob): Promise<string>
 }
@@ -141,12 +143,14 @@ const EMPTY_BOARD = JSON.stringify(
   2,
 )
 
+/** `created` value for a new doc: local time to the minute. */
+export const createdStamp = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16)
+
 /** Starting contents of a new page file. */
-export const newPageContent = (type: 'doc' | 'board') =>
-  type === 'board' ? EMPTY_BOARD : `---
-created: ${new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16)}
+export const newPageContent = (type: 'doc' | 'board') => (type === 'board' ? EMPTY_BOARD : `---
+created: ${createdStamp()}
 ---
-`
+`)
 
 /** `img-<id>.<ext>` for a pasted image. */
 export function assetName(image: Blob) {
@@ -251,6 +255,7 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
       for (const path of paths) await del(path)
     },
 
+    listTemplates: async () => templateNames(await listEntries(await dirAt(root, '.templates')).catch(() => [])),
     trash: (paths) => trashPaths(io, paths),
     restore: (path) => restorePath(io, path),
     listTrash: async () => topLevel(trashedPages(await listEntries(await dirAt(root, '.trash')).catch(() => []))),

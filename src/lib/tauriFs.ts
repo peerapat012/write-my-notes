@@ -4,7 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { fileSearchTexts } from '@/features/search/boardText'
 import { parseIcon, parseIconColor, type Entry } from '@/features/sidebar/tree'
-import { originalPath, restorePath, topLevel, trashedPages, trashPaths, TRASH } from './trash'
+import { originalPath, templateNames, restorePath, topLevel, trashedPages, trashPaths, TRASH } from './trash'
 import { assetName, moveWithLinks, newPageContent, segments, splitPath, type Vault } from './fs'
 
 const ROOT_KEY = 'write-my-notes:vault'
@@ -87,6 +87,7 @@ async function tauriVault(root: string): Promise<Vault> {
       }
     },
 
+    listTemplates: async () => templateNames((await listEntries(root, '.templates').catch(() => [])).map((e) => ({ ...e, path: e.path.slice('.templates/'.length) }))),
     trash: (paths) => trashPaths(io, paths),
     restore: (path) => restorePath(io, path),
     listTrash: async () =>

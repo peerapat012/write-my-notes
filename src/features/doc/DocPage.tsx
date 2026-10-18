@@ -4,7 +4,7 @@ import '@milkdown/crepe/theme/frame.css'
 import { exportToSvg } from '@excalidraw/excalidraw'
 import { commandsCtx, editorViewCtx, parserCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import type { Ctx } from '@milkdown/kit/ctx'
-import { getMarkdown, replaceRange } from '@milkdown/kit/utils'
+import { getMarkdown, replaceAll, replaceRange } from '@milkdown/kit/utils'
 import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
 import { syntaxHighlighting } from '@codemirror/language'
 import { classHighlighter } from '@lezer/highlight'
@@ -19,6 +19,9 @@ import DocAi from './DocAi'
 import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { mermaidPreview } from './mermaid'
+import { localDate } from '@/features/templates/daily'
+import TemplatePicker from '@/features/templates/TemplatePicker'
+import { fromTemplate } from '@/features/templates/templates'
 import { headings, type Heading } from './outline'
 import { NEW_TASKS } from './tasks'
 import { tasksView } from './tasksView'
@@ -94,6 +97,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const [icon, setIconState] = useState<string>()
   const [iconColor, setIconColor] = useState<string>()
   const [picker, setPicker] = useState<DOMRect>() // icon picker popover
+  const [templates, setTemplates] = useState(false) // template picker, opened from the Start row
   const [empty, setEmpty] = useState(false) // no text yet: the Add icon link stays visible
   const [info, setInfo] = useState(() => localStorage.getItem(INFO_KEY) === 'open')
   const [props, setProps] = useState<ReturnType<typeof getProps>>({ created: undefined, tags: [] })
@@ -431,6 +435,29 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           }
         }}
       />
+      {empty && ready && (
+        <p className="mt-1 text-neutral-500 print:hidden">
+          Start:{' '}
+          <button className="font-medium text-neutral-700 underline-offset-2 hover:text-neutral-900 hover:underline" onClick={() => editor.current?.editor.action((ctx) => openAi(ctx))}>
+            With AI
+          </button>{' '}
+          ·{' '}
+          <button className="font-medium text-neutral-700 underline-offset-2 hover:text-neutral-900 hover:underline" onClick={() => setTemplates(true)}>
+            Template
+          </button>
+        </p>
+      )}
+      {templates && (
+        <TemplatePicker
+          vault={vault}
+          onClose={() => setTemplates(false)}
+          onPick={(body) => {
+            setTemplates(false)
+            // The body only: the doc keeps its own front matter (and `created`).
+            editor.current?.editor.action(replaceAll(splitFrontMatter(fromTemplate(body, 'x', localDate())).body, true))
+          }}
+        />
+      )}
       {blockMenu && (
         <Menu
           label="Block actions"
