@@ -1,6 +1,9 @@
 import { ArrowDownUp, Copy, FileText, FolderOpen, Heading1, List, Pencil, Plus, Presentation, Quote, Search, Trash2, Type } from 'lucide-react'
+import { useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import Menu, { MenuRow } from '@/components/Menu'
+import TableBlock from '@/features/doc/TableBlock'
+import { SAMPLE_TABLE } from '@/features/doc/datatable'
 import { ghostButton, iconButton, input, panel, primaryButton, secondaryButton, skeleton } from '@/components/ui'
 
 /** Dev-only (`/dev/ui`): the shared components in light and dark side by side, for screenshots and contrast checks. */
@@ -18,8 +21,12 @@ export default function DevUi() {
 const noop = () => {}
 
 function Sheet() {
+  const [table, setTable] = useState(SAMPLE_TABLE)
   return (
     <div className="h-full space-y-8 bg-white p-8 text-neutral-900">
+      <Section title="Data table">
+        <TableBlock text={table} commit={setTable} remove={noop} docPath="Dev.md" />
+      </Section>
       <Section title="Buttons">
         <div className="flex flex-wrap items-center gap-2">
           <button className={primaryButton}>Primary</button>

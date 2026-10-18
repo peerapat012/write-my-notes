@@ -25,6 +25,8 @@ import {
   serializeTable,
   setCell,
   setColumnType,
+  setColumnWidth,
+  MIN_COL_WIDTH,
   sortedRows,
   splitMulti,
   summaryText,
@@ -194,4 +196,21 @@ test('page links in cells: out, and through rename and backlinks', () => {
   const moved = rewriteLinks({ 'Work/Sprint.md': doc }, 'Plan.md', 'Archive/Plan.md')
   expect(moved['Work/Sprint.md']).toContain('[Plan](../Archive/Plan.md)')
   expect(backlinks('Plan.md', [{ path: 'Work/Sprint.md', kind: 'file', links: linkTargets('Work/Sprint.md', doc) }])).toEqual(['Work/Sprint.md'])
+})
+
+test('column width `w`: round trip, missing, invalid ignored, clamped', () => {
+  const t = parseTable('@schema {"types":["text","text"],"w":{"0":240,"2":150}}\n| Title | A | B |\n|---|---|---|\n| x | y | z |')
+  expect(t.cols.map((c) => c.w)).toEqual([240, undefined, 150])
+  expect(parseTable(serializeTable(t))).toEqual(t)
+  expect(serializeTable(t)).toContain('"w":{"0":240,"2":150}')
+  // missing w: nothing written
+  expect(serializeTable(parseTable(SPRINT))).not.toContain('"w"')
+  // invalid values are ignored
+  const bad = parseTable('@schema {"w":{"0":"wide","1":-5,"2":null,"3":99}}\n| Title | A | B | C |\n|---|---|---|---|')
+  expect(bad.cols.map((c) => c.w)).toEqual([undefined, undefined, undefined, undefined])
+  expect(setColumnWidth(t, 1, 40).cols[1].w).toBe(MIN_COL_WIDTH)
+  expect(setColumnWidth(t, 1, 300.4).cols[1].w).toBe(300)
+  // a column keeps its width when moved
+  expect(moveColumn(t, 1, 1).cols[2].w).toBeUndefined()
+  expect(moveColumn(t, 1, 1).cols[1].w).toBe(150)
 })

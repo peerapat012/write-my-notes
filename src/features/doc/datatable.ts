@@ -7,7 +7,9 @@ export const TYPES = ['text', 'number', 'select', 'multi-select', 'checkbox', 'd
 export type ColType = (typeof TYPES)[number]
 export type Option = { n: string; c: string } // name, color from the icon palette
 /** `type` is kept as written: an unknown type works as Text until the column is retyped. Column 0 is Title. */
-export type Column = { name: string; type: string; options?: Option[]; summary?: string }
+export type Column = { name: string; type: string; options?: Option[]; summary?: string; w?: number }
+export const DEFAULT_COL_WIDTH = 180
+export const MIN_COL_WIDTH = 100
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 export type Table = { title: string; cols: Column[]; rows: string[][]; sort?: Sort }
 
@@ -20,6 +22,7 @@ type Schema = {
   options?: Record<string, Option[]>
   sort?: Sort
   summary?: Record<string, string>
+  w?: Record<string, number>
 }
 
 export function parseTable(text: string): Table {
@@ -42,6 +45,10 @@ export function parseTable(text: string): Table {
     return col
   })
   if (schema.summary?.[0]) cols[0].summary = schema.summary[0]
+  cols.forEach((c, i) => {
+    const w = schema.w?.[i]
+    if (typeof w === 'number' && Number.isFinite(w) && w >= MIN_COL_WIDTH) c.w = Math.round(w)
+  })
   const sort = schema.sort && schema.sort.col >= 0 && schema.sort.col < cols.length ? schema.sort : undefined
   return { title: schema.title ?? 'Untitled', cols, rows: rows.map((r) => cols.map((_, i) => r[i] ?? '')), sort }
 }
@@ -53,6 +60,8 @@ export function serializeTable(t: Table) {
   if (t.sort) schema.sort = t.sort
   const summary = Object.fromEntries(t.cols.flatMap((c, i) => (c.summary && c.summary !== 'none' ? [[i, c.summary]] : [])))
   if (Object.keys(summary).length) schema.summary = summary
+  const w = Object.fromEntries(t.cols.flatMap((c, i) => (c.w ? [[i, c.w]] : [])))
+  if (Object.keys(w).length) schema.w = w
   const line = (c: string[]) => `| ${c.map(cell).join(' | ')} |`
   return [`@schema ${JSON.stringify(schema)}`, line(t.cols.map((c) => c.name)), `|${t.cols.map(() => '---').join('|')}|`, ...t.rows.map(line)].join('\n')
 }
@@ -96,6 +105,9 @@ export const renameColumn = (t: Table, i: number, name: string): Table => ({
   ...t,
   cols: t.cols.map((c, j) => (j === i ? { ...c, name: name.replace(/\s*\n\s*/g, ' ').trim() || c.name } : c)),
 })
+
+/** Sets a column's width, never below the minimum. */
+export const setColumnWidth = (t: Table, i: number, w: number): Table => mapCol(t, i, (c) => ({ ...c, w: Math.max(MIN_COL_WIDTH, Math.round(w)) }))
 
 export const canMove = (t: Table, i: number, dir: -1 | 1) => i >= 1 && i + dir >= 1 && i + dir < t.cols.length
 
@@ -308,3 +320,11 @@ export function summaryText(t: Table, i: number) {
   }[kind]
   return `${SHORT[kind]} ${value}`
 }
+
+/** Dev sheet sample (/dev/ui): every column type, so the grid can be checked by eye. */
+export const SAMPLE_TABLE = `@schema {"title":"Sprint","types":["select","date","checkbox","number","link"],"options":{"1":[{"n":"Not started","c":"gray"},{"n":"Done","c":"green"}]},"summary":{"1":"empty%"}}
+| Title | Status | Due | Done | Points | Site |
+|---|---|---|---|---|---|
+| Write the spec | Done | 2026-10-20 | [x] | 3 | https://example.com |
+| Review | Not started |  | [ ] | 5 |  |
+|  |  |  | [ ] |  |  |`

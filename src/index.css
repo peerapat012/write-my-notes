@@ -392,3 +392,15 @@ main .milkdown .ProseMirror a:is([href$=".md"], [href$=".excalidraw"]) {
     overflow: visible !important;
   }
 }
+
+/* Data table: 8px horizontal scrollbar, thumb only while the pointer is over it. */
+.dt-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.dt-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.dt-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+}

@@ -44,6 +44,7 @@ import {
   canMove,
   CHECKED,
   columnEmpty,
+  DEFAULT_COL_WIDTH,
   deleteColumn,
   deleteRow,
   duplicateColumn,
@@ -54,6 +55,7 @@ import {
   isChecked,
   joinMulti,
   kindOf,
+  MIN_COL_WIDTH,
   moveColumn,
   pageLinks,
   parseTable,
@@ -65,6 +67,7 @@ import {
   serializeTable,
   setCell,
   setColumnType,
+  setColumnWidth,
   sortedRows,
   splitMulti,
   SUMMARY_LABELS,
@@ -91,6 +94,10 @@ const TYPE_INFO: Record<ColType, [string, LucideIcon]> = {
 const iconOf = (col: Column) => TYPE_INFO[kindOf(col)][1]
 const TypeIcon = ({ col, size = 14 }: { col: Column; size?: number }) => createElement(iconOf(col), { size, className: 'shrink-0' })
 
+const RAIL = 24 // left rail: row grip
+const ADD = 40 // add-column button
+const cellBorder = 'border-r border-b border-neutral-200'
+
 type Update = (fn: (t: Table) => Table) => void
 
 type Props = {
@@ -111,6 +118,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
   const [record, setRecord] = useState<number>() // row open in the Expand record peek
   const [confirmDelete, setConfirmDelete] = useState<number>() // column whose delete waits for a yes
   const [editOptions, setEditOptions] = useState<number>() // column whose options dialog is open
+  const [drag, setDrag] = useState<{ i: number; w: number }>() // column being resized, and its live width
   const root = useRef<HTMLDivElement>(null)
   const sorted = !!table.sort
   const shown = sortedRows(table).filter((r) => rowMatches(table.rows[r], query))
@@ -215,7 +223,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
     },
   ]
 
-  const width = (i: number) => (i === 0 ? 'min-w-[220px]' : 'min-w-[160px]')
+  const widthOf = (i: number) => (drag?.i === i ? drag.w : (table.cols[i].w ?? DEFAULT_COL_WIDTH))
   const smallButton = 'grid size-6 place-items-center rounded-md text-neutral-500 transition-colors duration-150 hover:bg-neutral-200 hover:text-neutral-900'
 
   return (
@@ -283,10 +291,18 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </>
         )}
       </div>
-      <div className="-ml-7 overflow-x-auto pb-1 pl-7 print:ml-0 print:overflow-visible print:pl-0">
-        <table role="grid" aria-label={table.title} className="w-max min-w-full border-collapse">
+      <div className="dt-scroll w-fit max-w-full overflow-x-auto rounded-lg border border-neutral-200 print:overflow-visible">
+        <table role="grid" aria-label={table.title} className="border-separate border-spacing-0" style={{ tableLayout: 'fixed', width: (readOnly ? 0 : RAIL + ADD) + table.cols.reduce((n, _, i) => n + widthOf(i), 0) }}>
+          <colgroup>
+            {!readOnly && <col style={{ width: RAIL }} className="print:hidden" />}
+            {table.cols.map((_, i) => (
+              <col key={i} style={{ width: widthOf(i) }} />
+            ))}
+            {!readOnly && <col style={{ width: ADD }} className="print:hidden" />}
+          </colgroup>
           <thead>
-            <tr className="border-b border-neutral-200">
+            <tr>
+              {!readOnly && <th className={`${cellBorder} bg-neutral-50 p-0 print:hidden`} />}
               {table.cols.map((col, i) => {
                 const head = (
                   <>
@@ -298,20 +314,31 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                   </>
                 )
                 return (
-                  <th key={i} scope="col" className={`${width(i)} border-r border-neutral-200 p-0 text-left font-medium text-neutral-500 last:border-r-0`}>
+                  <th key={i} scope="col" className={`${cellBorder} relative bg-neutral-50 p-0 text-left text-sm font-medium text-neutral-700`}>
                     {readOnly ? (
-                      <span className="flex h-9 items-center gap-1.5 px-2">{head}</span>
+                      <span className="flex h-[34px] items-center gap-1.5 px-1.5">{head}</span>
                     ) : (
-                      <ColumnHeader label={`${col.name} column`} col={col} groups={columnMenu(i)} onRename={(name) => update((t) => renameColumn(t, i, name))}>
-                        {head}
-                      </ColumnHeader>
+                      <>
+                        <ColumnHeader label={`${col.name} column`} col={col} groups={columnMenu(i)} onRename={(name) => update((t) => renameColumn(t, i, name))}>
+                          {head}
+                        </ColumnHeader>
+                        <ResizeHandle
+                          name={col.name}
+                          width={widthOf(i)}
+                          onDrag={(w) => setDrag({ i, w })}
+                          onDone={(w) => {
+                            setDrag(undefined)
+                            if (w !== (col.w ?? DEFAULT_COL_WIDTH)) update((t) => setColumnWidth(t, i, w))
+                          }}
+                        />
+                      </>
                     )}
                   </th>
                 )
               })}
               {!readOnly && (
-                <th className="w-9 p-0 print:hidden">
-                  <button className={`${iconButton} mx-1`} title="Add column" aria-label="Add column" onClick={() => update((t) => insertColumn(t, t.cols.length))}>
+                <th className="min-w-10 border-b border-neutral-200 bg-neutral-50 p-0 print:hidden">
+                  <button className="grid h-[34px] w-full place-items-center text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900" title="Add column" aria-label="Add column" onClick={() => update((t) => insertColumn(t, t.cols.length))}>
                     <Plus size={16} />
                   </button>
                 </th>
@@ -320,19 +347,21 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r} className="group/row border-b border-neutral-200 transition-colors duration-150 hover:bg-neutral-50 starting:opacity-0 [transition-property:background-color,opacity]">
+              <tr key={r} className="group/row transition-colors duration-150 hover:bg-neutral-50 starting:opacity-0 [transition-property:background-color,opacity]">
+                {!readOnly && (
+                  <td className={`${cellBorder} p-0 align-middle print:hidden`}>
+                    <span className="grid place-items-center opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[aria-expanded=true]]:opacity-100">
+                      <MenuButton label="Row actions" className={`${smallButton} cursor-grab`} groups={rowMenu(r)}>
+                        <GripVertical size={14} />
+                      </MenuButton>
+                    </span>
+                  </td>
+                )}
                 {table.cols.map((_, c) => (
-                  <td key={c} className={`${width(c)} relative border-r border-neutral-200 p-0 align-top last:border-r-0`}>
-                    {c === 0 && !readOnly && (
-                      <span className="absolute top-1.5 -left-7 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 print:hidden">
-                        <MenuButton label="Row actions" className={`${smallButton} cursor-grab`} groups={rowMenu(r)}>
-                          <GripVertical size={14} />
-                        </MenuButton>
-                      </span>
-                    )}
+                  <td key={c} className={`${cellBorder} relative p-0 align-top`}>
                     <Cell t={table} r={r} c={c} update={update} docPath={docPath} readOnly={readOnly} />
                     {c === 0 && !readOnly && (
-                      <span className="absolute top-1.5 right-1 flex gap-0.5 rounded-md bg-white opacity-0 shadow-sm transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 print:hidden">
+                      <span className="absolute top-1 right-1 flex gap-0.5 rounded-md bg-white opacity-0 shadow-sm transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 print:hidden">
                         <button className={smallButton} title="Expand record" aria-label="Expand record" onClick={() => setRecord(r)}>
                           <Maximize2 size={13} />
                         </button>
@@ -343,20 +372,20 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                     )}
                   </td>
                 ))}
-                {!readOnly && <td className="print:hidden" />}
+                {!readOnly && <td className="border-b border-neutral-200 print:hidden" />}
               </tr>
             ))}
             {!shown.length && (
-              <tr className="border-b border-neutral-200">
-                <td colSpan={table.cols.length + 1} className="px-2 py-2 text-neutral-500">
+              <tr>
+                <td colSpan={table.cols.length + 2} className="h-[34px] border-b border-neutral-200 px-2 text-neutral-500">
                   {query ? `No rows match “${query}”` : 'No rows yet.'}
                 </td>
               </tr>
             )}
             {!readOnly && (
               <tr className="print:hidden">
-                <td colSpan={table.cols.length + 1} className="p-0">
-                  <button className="flex h-8 w-full items-center gap-1.5 px-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900" onClick={() => addRow()}>
+                <td colSpan={table.cols.length + 2} className="border-b border-neutral-200 p-0">
+                  <button className="flex h-[34px] w-full items-center gap-1.5 px-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900" onClick={() => addRow()}>
                     <Plus size={14} /> New Record
                   </button>
                 </td>
@@ -365,11 +394,12 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </tbody>
           <tfoot>
             <tr>
+              {!readOnly && <td className="print:hidden" />}
               {table.cols.map((col, i) => {
                 const value = summaryText(table, i)
                 if (readOnly)
                   return (
-                    <td key={i} className="h-8 px-2 text-right text-xs text-neutral-500">
+                    <td key={i} className="h-[34px] px-2 text-right text-xs text-neutral-500">
                       {value}
                     </td>
                   )
@@ -377,7 +407,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                   <td key={i} className={`p-0 text-right ${value ? '' : 'print:invisible'}`}>
                     <MenuButton
                       label={`Calculate ${col.name}`}
-                      className="h-8 w-full rounded-md px-2 text-right text-xs text-neutral-500 opacity-100 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900"
+                      className="h-[34px] w-full truncate px-2 text-right text-xs whitespace-nowrap text-neutral-500 opacity-100 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900"
                       groups={[
                         {
                           items: summariesFor(kindOf(col)).map((kind) => ({
@@ -492,6 +522,42 @@ function CommitInput({
   )
 }
 
+/** Drag the header's right edge to resize (arrow keys too). Reports the live width while dragging, then the final one. */
+function ResizeHandle({ name, width, onDrag, onDone }: { name: string; width: number; onDrag: (w: number) => void; onDone: (w: number) => void }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${name}`}
+      tabIndex={0}
+      className="absolute top-0 -right-[3px] z-10 h-full w-[6px] cursor-col-resize touch-none transition-colors duration-150 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
+      onPointerDown={(e) => {
+        e.preventDefault()
+        const el = e.currentTarget
+        el.setPointerCapture(e.pointerId)
+        const x0 = e.clientX
+        let w = width
+        const move = (ev: PointerEvent) => onDrag((w = Math.max(MIN_COL_WIDTH, Math.round(width + ev.clientX - x0))))
+        const up = () => {
+          el.removeEventListener('pointermove', move)
+          el.removeEventListener('pointerup', up)
+          el.removeEventListener('pointercancel', up)
+          onDone(w)
+        }
+        el.addEventListener('pointermove', move)
+        el.addEventListener('pointerup', up)
+        el.addEventListener('pointercancel', up)
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+        e.preventDefault()
+        e.stopPropagation()
+        onDone(Math.max(MIN_COL_WIDTH, width + (e.key === 'ArrowRight' ? 10 : -10)))
+      }}
+    />
+  )
+}
+
 /** Header button that opens the column menu, with the name field at its top. */
 function ColumnHeader({ label, col, groups, onRename, children }: { label: string; col: Column; groups: MenuGroup[]; onRename: (name: string) => void; children: ReactNode }) {
   const [anchor, setAnchor] = useState<DOMRect>()
@@ -503,7 +569,7 @@ function ColumnHeader({ label, col, groups, onRename, children }: { label: strin
         aria-haspopup="menu"
         aria-expanded={!!anchor}
         title={label}
-        className="flex h-9 w-full items-center gap-1.5 px-2 text-left font-medium transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900"
+        className="flex h-[34px] w-full items-center gap-1.5 px-1.5 text-left font-medium transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900"
         onClick={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}
       >
         {children}
@@ -592,7 +658,7 @@ function Cell({ t, r, c, update, docPath, readOnly }: CellProps) {
     else setEditing(true)
   }
 
-  const base = `flex min-h-9 w-full items-center gap-1 px-2 py-1.5 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${readOnly ? '' : 'cursor-text'}`
+  const base = `flex min-h-[34px] w-full items-center gap-1 px-2 py-1 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${readOnly ? '' : 'cursor-text'}`
   let shown: ReactNode
   if (misfit)
     shown = (
@@ -637,7 +703,6 @@ function Cell({ t, r, c, update, docPath, readOnly }: CellProps) {
   else
     shown = (
       <span className="min-w-0 break-words">
-        {c === 0 && <Type size={13} className="mr-1 inline align-[-2px] text-neutral-400" />}
         <LinkedText text={value} docPath={docPath} />
       </span>
     )
