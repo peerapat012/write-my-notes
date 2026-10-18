@@ -50,10 +50,25 @@ export async function gitState(): Promise<GitState> {
   }
 }
 
-/** `git add -A` then `git commit -m`; resolves to git's error text, or nothing on success. */
-export async function commitAll(message: string) {
-  for (const args of [['add', '-A'], ['commit', '-m', message]]) {
-    const r = await git(...args)
-    if (r.code !== 0) return (r.stderr || r.stdout).trim() || `git ${args[0]} failed (exit ${r.code})`
-  }
+/** Runs git; resolves to its error text, or nothing on success. */
+async function run(...args: string[]) {
+  const r = await git(...args)
+  if (r.code !== 0) return (r.stderr || r.stdout).trim() || `git ${args[0]} failed (exit ${r.code})`
 }
+
+/** `git add -A` then `git commit -m`. */
+export async function commitAll(message: string) {
+  return (await run('add', '-A')) ?? run('commit', '-m', message)
+}
+
+/** What `pull` returns, instead of running git, when the working tree has changes. */
+export const COMMIT_FIRST = 'Commit before pull'
+
+/** `git pull --rebase`, refused while the working tree is dirty. */
+export async function pull() {
+  const state = await gitState()
+  if (state.kind === 'ok' && state.changes.length) return COMMIT_FIRST
+  return run('pull', '--rebase')
+}
+
+export const push = () => run('push')

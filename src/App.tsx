@@ -176,6 +176,13 @@ export default function App() {
     await open(root)
   }
 
+  /** After `git pull`: rescan for new, changed and removed pages, and remount the open one so it re-reads from disk. */
+  async function pulled() {
+    if (!root) return
+    await open(root)
+    setRev((r) => r + 1)
+  }
+
   const rename = (from: string, name: string) => move(from, join(parentOf(from), name + ext(from)))
 
   // Asks for the name in a dialog (below), then creates the page and opens it.
@@ -231,7 +238,7 @@ export default function App() {
           openSettings={() => setShowSettings(true)}
           openSearch={() => setShowSearch(true)}
           hide={toggleSidebar}
-          git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} /> : undefined}
+          git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
         />
       ) : (
         <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
