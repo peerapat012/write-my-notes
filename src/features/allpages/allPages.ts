@@ -56,3 +56,18 @@ export function sortRows(rows: PageRow[], key: SortKey, dir: 'asc' | 'desc'): Pa
 
 /** Created column text: the date, or "—" for a board or a doc without one. */
 export const createdLabel = (row: PageRow) => (row.created ? new Date(row.created).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—')
+
+/** "just now", "2 min ago", "3 hr ago", "yesterday", "5 days ago", then a date. */
+export function relativeTime(ms: number, now = Date.now()) {
+  const s = Math.round((now - ms) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`
+  if (s < 86400) return `${Math.floor(s / 3600)} hr ago`
+  const days = Math.floor(s / 86400)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' })
+}
+
+/** The last 6 pages by last change (start page and the empty Ctrl+K palette). */
+export const recentRows = (rows: PageRow[]) => [...rows].sort((a, b) => b.updated - a.updated).slice(0, 6)

@@ -255,9 +255,9 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
       for (const path of paths) await del(path)
     },
 
-    listTemplates: async () => templateNames(await listEntries(await dirAt(root, '.templates')).catch(() => [])),
+    listTemplates: async () => templateNames(await dirAt(root, '.templates').then(listEntries).catch(() => [])),
     trash: (paths) => trashPaths(io, paths),
     restore: (path) => restorePath(io, path),
-    listTrash: async () => topLevel(trashedPages(await listEntries(await dirAt(root, '.trash')).catch(() => []))),
+    listTrash: async () => topLevel(trashedPages(await dirAt(root, '.trash').then(listEntries).catch(() => []))),
   }
 }

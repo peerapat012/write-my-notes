@@ -27,6 +27,30 @@
   --color-danger: #c4372f;
   --shadow-panel: 0 1px 2px rgb(15 15 15 / 0.06), 0 4px 16px rgb(15 15 15 / 0.1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Radius: rows, buttons, menu items (md 6px); panels, blocks, sidebar rows (lg 8px); dialogs (xl 12px). */
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  /* Doc type scale: body 16/1.65, headings 32/24/20, page title 40. */
+  --text-body: 16px;
+  --text-body--line-height: 1.65;
+  --text-h1: 32px;
+  --text-h1--line-height: 1.25;
+  --text-h2: 24px;
+  --text-h2--line-height: 1.3;
+  --text-h3: 20px;
+  --text-h3--line-height: 1.4;
+  --text-title: 40px;
+  --text-title--line-height: 1.2;
+}
+
+/* Motion: 150ms hover and focus (`duration-150`), 200ms panels and menus (`duration-200`), both with --ease-out.
+   Layout sizes: top bar 40px, sidebar row 32px, sidebar 220-400px (default 260). */
+:root {
+  --duration-fast: 150ms;
+  --duration-panel: 200ms;
+  --topbar-h: 40px;
+  --row-h: 32px;
 }
 
 html {
@@ -126,25 +150,29 @@ html {
   --crepe-shadow-2: var(--shadow-panel);
 }
 
-/* Doc type scale. Content headings stay well below the 40px page title, so the two never read alike. */
+/* Doc type scale (tokens above). More space above a heading than below it (about 1.6 : 1). */
 main .milkdown .ProseMirror {
   padding: 0;
-  line-height: 1.65;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
 
   p {
-    line-height: 1.65;
-    padding: 3px 0;
+    line-height: var(--text-body--line-height);
+    padding: 0;
+    margin: 0.6em 0;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 650;
+    letter-spacing: -0.015em;
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: 0.4em;
   }
-  h1 { font-size: 1.75em; line-height: 1.25; margin-top: 1.6em; }
-  h2 { font-size: 1.375em; line-height: 1.3; margin-top: 1.4em; }
-  h3 { font-size: 1.125em; line-height: 1.4; margin-top: 1.2em; }
+  h1 { font-size: var(--text-h1); line-height: var(--text-h1--line-height); margin-top: 1.1em; letter-spacing: -0.02em; font-weight: 700; }
+  h2 { font-size: var(--text-h2); line-height: var(--text-h2--line-height); margin-top: 1em; }
+  h3 { font-size: var(--text-h3); line-height: var(--text-h3--line-height); margin-top: 0.9em; }
   h4, h5, h6 { font-size: 1em; line-height: 1.5; margin-top: 1em; }
+  li { margin: 4px 0; }
+  li p { margin: 0; }
   a {
     color: inherit;
     text-decoration-color: var(--color-neutral-400);
@@ -154,8 +182,36 @@ main .milkdown .ProseMirror {
     text-decoration-color: currentColor;
   }
   code {
-    padding: 0 4px;
+    padding: 1px 5px;
+    border-radius: var(--radius-md);
+    background: var(--color-neutral-50);
+    font-size: 0.875em;
   }
+  blockquote {
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: var(--color-neutral-50);
+    padding: 10px 16px;
+    margin: 0.8em 0;
+  }
+  blockquote::before { display: none; } /* Crepe's colored side bar */
+  blockquote p { margin: 0.3em 0; }
+  img { border-radius: var(--radius-lg); }
+  hr {
+    border: 0;
+    border-top: 1px solid var(--color-neutral-200);
+    margin: 2em 0;
+  }
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--color-neutral-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  th, td { border-color: var(--color-neutral-200); }
+  th { background: var(--color-neutral-50); color: var(--color-neutral-700); font-weight: 600; }
+  tr:hover td { background: color-mix(in srgb, var(--color-neutral-100) 50%, transparent); }
   *::selection {
     background: color-mix(in srgb, var(--color-accent) 28%, transparent);
   }
@@ -165,18 +221,54 @@ main .milkdown input::placeholder {
   color: var(--color-neutral-500);
 }
 
-/* Crepe's slash menu, selection toolbar and language list: the same solid panel as our own menus. */
-main .milkdown :is(.milkdown-slash-menu, .milkdown-toolbar, .list-wrapper) {
+/* Crepe chrome (slash menu, selection toolbar, language list, link tooltip, block handle): the same panel as `Menu`. */
+main .milkdown :is(.milkdown-slash-menu, .milkdown-toolbar, .list-wrapper, .milkdown-link-preview, .milkdown-link-edit) {
   background: var(--color-white);
   border: 1px solid var(--color-neutral-200);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
+  animation: menu-in var(--duration-panel) var(--ease-out);
 }
+main .milkdown .milkdown-slash-menu {
+  padding: 4px;
+  .tab-group { border-color: var(--color-neutral-200); }
+  .menu-group h6 { font-size: 12px; font-weight: 500; color: var(--color-neutral-500); padding: 6px 8px 4px; text-transform: none; }
+  .menu-group li {
+    min-height: var(--row-h);
+    border-radius: var(--radius-md);
+    padding: 4px 8px;
+    gap: 10px;
+    font-size: 14px;
+  }
+  .menu-group li.hover, .menu-group li:hover { background: var(--color-neutral-100); }
+  .menu-group li svg { width: 16px; height: 16px; color: var(--color-neutral-500); }
+}
+main .milkdown .milkdown-toolbar {
+  padding: 2px;
+  .toolbar-item { border-radius: var(--radius-md); }
+  .toolbar-item:hover { background: var(--color-neutral-100); }
+  .toolbar-item.active { background: var(--color-neutral-200); }
+  .divider { background: var(--color-neutral-200); }
+}
+main .milkdown .milkdown-block-handle {
+  .operation-item { border-radius: var(--radius-md); color: var(--color-neutral-400); }
+  .operation-item:hover { background: var(--color-neutral-100); color: var(--color-neutral-700); }
+}
+
+@keyframes menu-in {
+  from { opacity: 0; translate: 0 -4px; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+/* Page content fades in when it loads. */
+.fade-in { animation: fade-in var(--duration-panel) var(--ease-out); }
 
 /* Code blocks: a calm surface in both themes; token colours come from CodeMirror's classHighlighter. */
 main .milkdown .milkdown-code-block {
   border: 1px solid var(--color-neutral-200);
-  border-radius: 8px;
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
   padding: 6px 12px 12px;
   margin: 8px 0;
 

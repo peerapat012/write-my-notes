@@ -1,3 +1,4 @@
+import { toastError } from '@/lib/toast'
 import { FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Dialog from '@/components/Dialog'
@@ -21,7 +22,7 @@ export default function TemplatePicker({ vault, onPick, onClose }: Props) {
     try {
       onPick(await vault.read(`.templates/${name}.md`))
     } catch (e) {
-      alert(`Could not read the template: ${e}`)
+      toastError(`Could not read the template: ${e}`)
     }
   }
 

@@ -39,7 +39,7 @@ export default function AllPagesPage({ entries, go, favorites, toggleFavorite }:
   const ariaSort = (key: SortKey) => (sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none')
 
   return (
-    <div className="@container mx-auto max-w-5xl px-8 pt-16 pb-32 @3xl:px-16">
+    <div className="@container mx-auto max-w-5xl px-8 pt-8 pb-32 @3xl:px-16">
       <h1 className="mb-4 text-[40px] leading-tight font-bold tracking-[-0.02em]">All pages</h1>
       <div role="tablist" className="mb-4 flex gap-1">
         {TABS.map(([id, label]) => (

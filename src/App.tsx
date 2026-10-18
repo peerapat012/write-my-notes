@@ -1,7 +1,11 @@
-import { FileText, FolderOpen, PanelLeftOpen, PanelRightOpen, Presentation, Search } from 'lucide-react'
+import Toasts from '@/components/Toast'
+import { toast, toastError } from '@/lib/toast'
+import { CalendarDays, FileText, FolderOpen, LayoutList, LayoutTemplate, Link, Moon, PanelLeftOpen, Presentation, Printer, Search, Settings as SettingsIcon, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Dialog from '@/components/Dialog'
 import TitleBar from '@/components/TitleBar'
+import TopBar from '@/components/TopBar'
+import type { MenuGroup } from '@/components/Menu'
 import RightPanel from '@/components/RightPanel'
 import EmptyState from '@/components/EmptyState'
 
@@ -34,9 +38,19 @@ import ChatTab, { type BoardChat } from '@/features/chat/ChatTab'
 import { chatStore } from '@/ai/chatStore'
 import { pruneChats } from '@/ai/chat'
 import AllPagesPage from '@/features/allpages/AllPagesPage'
+import StartPage from '@/features/allpages/StartPage'
+import { buildRows, recentRows } from '@/features/allpages/allPages'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
+
+const findNode = (nodes: TreeNode[], path: string): TreeNode | undefined => {
+  for (const n of nodes) {
+    if (n.path === path) return n
+    const hit = findNode(n.children, path)
+    if (hit) return hit
+  }
+}
 
 const PAGE_PREFIX = import.meta.env.BASE_URL + 'page/' // '/page/' locally, '/write-my-notes/page/' on Pages
 const currentPage = () =>
@@ -44,6 +58,9 @@ const currentPage = () =>
 
 const SIDEBAR_KEY = 'write-my-notes:sidebar'
 const PANEL_KEY = 'write-my-notes:panel'
+const WIDTH_KEY = 'write-my-notes:sidebar-width'
+const DEFAULT_WIDTH = 260
+const clampWidth = (w: number) => Math.min(400, Math.max(220, w))
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
 const subscribeDark = (cb: () => void) => {
@@ -58,6 +75,7 @@ export default function App() {
   const tree = useMemo(() => buildTree(entries), [entries])
   const exists = useMemo(() => new Set(entries.map((e) => e.path)), [entries])
   // Rebuilt on every scan (open, focus rescan, move) and doc or board save.
+  const recent = useMemo(() => recentRows(buildRows(entries)), [entries])
   const index = useMemo<SearchIndex>(
     () => new Map(entries.filter((e) => /\.(md|excalidraw)$/.test(e.path)).map((e) => [e.path, e.boardTexts ?? e.text ?? ''])),
     [entries],
@@ -101,11 +119,14 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [deleting, setDeleting] = useState<TreeNode>() // delete confirmation dialog
+  const [replacing, setReplacing] = useState<TreeNode>() // template replace confirmation dialog
   const deletingPages = deleting && deletion(deleting).childPages
   const [templateDir, setTemplateDir] = useState<string>() // folder for a doc made from a template: the picker is open
   const [fresh, setFresh] = useState<string>() // a page just created: its title takes focus
   const [loading, setLoading] = useState(true) // until the stored folder (if any) has been scanned
   const [sidebar, setSidebar] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'hidden')
+  const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH))
+  const [resizing, setResizing] = useState(false) // dragging the sidebar edge: no width transition
   const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === 'shown') // right panel, closed by default
   const [outline, setOutline] = useState<Heading[]>([])
   const [preview, setPreview] = useState<{ page: string; content: string }>() // an AI change shown read-only
@@ -130,6 +151,12 @@ export default function App() {
     })
   }
 
+  function resizeSidebar(w: number) {
+    const next = clampWidth(w)
+    setWidth(next)
+    localStorage.setItem(WIDTH_KEY, String(next))
+  }
+
   function togglePanel() {
     setPanel((shown) => {
       localStorage.setItem(PANEL_KEY, shown ? 'hidden' : 'shown')
@@ -141,7 +168,7 @@ export default function App() {
     try {
       setViewing({ page: page!, hash: v.hash, date: v.date, content: await showFile(v.hash, v.path) })
     } catch (e) {
-      alert(`Could not open this version: ${e}`)
+      toastError(`Could not open this version: ${e}`)
     }
   }
 
@@ -151,7 +178,7 @@ export default function App() {
     try {
       await root.write(view.page, view.content)
     } catch (e) {
-      return alert(`Could not restore: ${e}`)
+      return toastError(`Could not restore: ${e}`)
     }
     setViewing(undefined)
     await open(root)
@@ -239,7 +266,7 @@ export default function App() {
     try {
       await openFresh(await pickVault())
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') alert(`Could not open folder: ${e}`)
+      if ((e as Error).name !== 'AbortError') toastError(`Could not open folder: ${e}`)
     }
   }
 
@@ -261,7 +288,7 @@ export default function App() {
       await Promise.all([...flushes].map((f) => f()))
       await root.move(from, to)
     } catch (e) {
-      alert(`Could not move: ${e}`)
+      toastError(`Could not move: ${e}`)
       return open(root)
     }
     updateFavs((f) => moveFavorites(f, from, to))
@@ -293,7 +320,7 @@ export default function App() {
       await root.trash(paths)
       updateFavs((f) => dropFavorites(f, paths))
     } catch (e) {
-      alert(`Could not move to Trash: ${e}`)
+      toastError(`Could not move to Trash: ${e}`)
     }
     await open(root)
   }
@@ -360,18 +387,19 @@ export default function App() {
     go(path)
   }
 
-  /** Writes a doc's body (without `created`) to `.templates/<name>.md`, asking before it replaces one. */
-  async function saveAsTemplate(node: TreeNode) {
+  /** Writes a doc's body (without `created`) to `.templates/<name>.md`; a name already taken asks first (Dialog). */
+  async function saveAsTemplate(node: TreeNode, replace = false) {
     if (!root) return
     try {
       await Promise.all([...flushes].map((f) => f()))
       const body = toTemplate(await root.read(node.path))
       const taken = (await root.listTemplates()).includes(node.name)
-      if (taken && !confirm(`Replace the template “${node.name}”?`)) return
+      if (taken && !replace) return setReplacing(node)
       if (!taken) await root.createPage('.templates', node.name, 'doc')
       await root.write(`.templates/${node.name}.md`, body)
+      toast(`Saved template “${node.name}”`, 'success')
     } catch (e) {
-      alert(`Could not save the template: ${e}`)
+      toastError(`Could not save the template: ${e}`)
     }
   }
 
@@ -387,7 +415,7 @@ export default function App() {
       }
       go(path)
     } catch (e) {
-      alert(`Could not open today’s note: ${e}`)
+      toastError(`Could not open today’s note: ${e}`)
     }
   }
 
@@ -404,22 +432,47 @@ export default function App() {
     go(path)
   }
 
-  const newPage = (
-    <>
-      <button className={secondaryButton} onClick={() => create('', 'doc')}>
-        <FileText size={16} /> New doc
-      </button>
-      <button className={secondaryButton} onClick={() => create('', 'board')}>
-        <Presentation size={16} /> New board
-      </button>
-    </>
-  )
+  // Doc and board pages get the breadcrumb (barTitle ''); other screens a title; the start page no bar.
+  const barTitle =
+    preview ? 'AI preview' : view ? 'Version' : page === '.trash' ? 'Trash' : page === '.all' ? 'All pages' : page === '.history' ? 'History' : page && /\.(md|excalidraw)$/.test(page) ? '' : undefined
+  const pageNode = page && barTitle === '' ? findNode(tree, page) : undefined
+  const pageMenu: MenuGroup[] | undefined = pageNode && [
+    ...(pageNode.type === 'doc'
+      ? [
+          {
+            items: [
+              { label: 'Save as template', icon: LayoutTemplate, onSelect: () => saveAsTemplate(pageNode) },
+              { label: 'Print / Save as PDF', icon: Printer, onSelect: () => print() },
+            ],
+          },
+        ]
+      : []),
+    {
+      items: [
+        {
+          label: 'Copy link',
+          icon: Link,
+          onSelect: () =>
+            navigator.clipboard.writeText(`[${pageNode.name}](${encodeURI(pageNode.path)})`).then(
+              () => toast('Link copied', 'success'),
+              () => toastError('Could not copy the link'),
+            ),
+        },
+      ],
+    },
+    { items: [{ label: 'Delete', icon: Trash2, onSelect: () => setDeleting(pageNode) }] },
+  ]
 
   return (
     <div className="flex h-screen flex-col text-sm print:block print:h-auto">
       {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page === '.all' ? 'All pages' : page === '.history' ? 'History' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
       <div className="flex min-h-0 flex-1 print:block">
-        {sidebar ? (
+        <div
+          inert={!sidebar}
+          className={`relative shrink-0 overflow-hidden border-neutral-200 print:hidden ${sidebar ? 'border-r' : ''} ${resizing ? '' : 'transition-[width] duration-200 ease-out'}`}
+          style={{ width: sidebar ? width : 0 }}
+        >
+          <div className="h-full" style={{ width }}>
           <Sidebar
             root={root}
             createFromTemplate={setTemplateDir}
@@ -444,7 +497,38 @@ export default function App() {
             hide={toggleSidebar}
             git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} openGraph={() => go('.history')} onSetup={() => setSetup(true)} /> : undefined}
           />
-        ) : (
+          </div>
+          {sidebar && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize sidebar"
+              aria-valuemin={220}
+              aria-valuemax={400}
+              aria-valuenow={width}
+              tabIndex={0}
+              title="Drag to resize, double-click to reset"
+              className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize transition-colors duration-150 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId)
+                setResizing(true)
+              }}
+              onPointerMove={(e) => resizing && setWidth(clampWidth(e.clientX))}
+              onPointerUp={(e) => {
+                setResizing(false)
+                resizeSidebar(e.clientX)
+              }}
+              onDoubleClick={() => resizeSidebar(DEFAULT_WIDTH)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  e.preventDefault()
+                  resizeSidebar(width + (e.key === 'ArrowRight' ? 16 : -16))
+                }
+              }}
+            />
+          )}
+        </div>
+        {!sidebar && (
           <div className="print:hidden flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
             <button className={iconButton} title="Show sidebar (Ctrl+\)" aria-label="Show sidebar" onClick={toggleSidebar}>
               <PanelLeftOpen size={16} />
@@ -457,7 +541,22 @@ export default function App() {
           </div>
         )}
         <div className="relative flex min-w-0 flex-1 print:block">
-        <main className="min-w-0 flex-1 overflow-auto print:overflow-visible">
+          <div className="flex min-w-0 flex-1 flex-col print:block">
+            {root && barTitle !== undefined && (
+              <TopBar
+                page={barTitle ? undefined : page!}
+                title={barTitle}
+                exists={exists}
+                icons={icons}
+                mtime={entries.find((e) => e.path === page)?.mtime}
+                favorite={page ? favSet.has(page) : false}
+                toggleFavorite={page ? () => updateFavs((f) => toggleFavorite(f, page)) : undefined}
+                menu={pageMenu}
+                go={go}
+                panel={tabs.length ? { open: panel, toggle: togglePanel } : undefined}
+              />
+            )}
+            <main className="min-h-0 min-w-0 flex-1 overflow-auto print:overflow-visible">
           {root && preview ? (
             <VersionView vault={root} dark={dark} view={{ page: preview.page, hash: 'ai-preview', date: new Date().toISOString(), content: preview.content }} label={`Preview of the AI’s version of ${preview.page}`} backLabel="Close preview" onBack={() => setPreview(undefined)} />
           ) : root && view ? (
@@ -488,9 +587,16 @@ export default function App() {
           ) : root && page === '.trash' ? (
             <TrashPage vault={root} entries={entries} onChange={() => open(root)} />
           ) : loading ? null : root ? (
-            <EmptyState icon={FileText} title="No page open" actions={newPage}>
-              Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
-            </EmptyState>
+              <StartPage
+                name={root.name || 'Notes'}
+                entries={entries}
+                favorites={favs.filter((p) => exists.has(p))}
+                go={go}
+                newDoc={() => create('', 'doc')}
+                newBoard={() => create('', 'board')}
+                openToday={openToday}
+                fromTemplate={() => setTemplateDir('')}
+              />
           ) : (
             <EmptyState
               icon={FolderOpen}
@@ -517,16 +623,35 @@ export default function App() {
             </EmptyState>
           )}
         </main>
-        {root && tabs.length > 0 &&
-          (panel ? (
-            <RightPanel tabs={tabs} onClose={togglePanel} />
-          ) : (
-            <button className={`${iconButton} absolute top-2 right-4 z-10 print:hidden`} title="Show panel" aria-label="Show panel" onClick={togglePanel}>
-              <PanelRightOpen size={16} />
-            </button>
-          ))}
+          </div>
+          {root && tabs.length > 0 && (
+            <div
+              inert={!panel}
+              className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-out print:hidden ${panel ? 'w-[300px]' : 'w-0'}`}
+            >
+              <RightPanel tabs={tabs} />
+            </div>
+          )}
         </div>
-        {showSearch && root && <SearchPalette index={index} icons={icons} go={go} onClose={() => setShowSearch(false)} />}
+        {showSearch && root && (
+          <SearchPalette
+            index={index}
+            icons={icons}
+            recent={recent}
+            go={go}
+            onClose={() => setShowSearch(false)}
+            actions={[
+              { label: 'New doc', icon: FileText, run: () => create('', 'doc') },
+              { label: 'New board', icon: Presentation, run: () => create('', 'board') },
+              { label: 'Today', icon: CalendarDays, run: openToday },
+              { label: 'All pages', icon: LayoutList, run: () => go('.all') },
+              { label: 'Toggle theme', icon: dark ? Sun : Moon, run: () => changeSettings({ ...settings, theme: dark ? 'light' : 'dark' }) },
+              { label: 'Toggle sidebar', icon: PanelLeftOpen, shortcut: 'Ctrl+\\', run: toggleSidebar },
+              { label: 'Settings', icon: SettingsIcon, run: () => setShowSettings(true) },
+              { label: 'Open another folder', icon: FolderOpen, run: pickFolder },
+            ]}
+          />
+        )}
         {templateDir !== undefined && root && <TemplatePicker vault={root} onPick={(body) => createFromTemplate(templateDir, body)} onClose={() => setTemplateDir(undefined)} />}
         {deleting && (
           <Dialog aria-label={`Move ${deleting.name} to Trash`} onClose={() => setDeleting(undefined)}>
@@ -545,6 +670,27 @@ export default function App() {
             </div>
           </Dialog>
         )}
+        {replacing && (
+          <Dialog aria-label="Replace template" onClose={() => setReplacing(undefined)}>
+            <h2 className="font-semibold">Replace the template “{replacing.name}”?</h2>
+            <p className="mt-2 text-neutral-700">A template with this name already exists. It will be overwritten with this page.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button autoFocus className={ghostButton} onClick={() => setReplacing(undefined)}>
+                Cancel
+              </button>
+              <button
+                className={primaryButton}
+                onClick={() => {
+                  const n = replacing
+                  setReplacing(undefined)
+                  saveAsTemplate(n, true)
+                }}
+              >
+                Replace
+              </button>
+            </div>
+          </Dialog>
+        )}
         {setup && root && (
           <SetupWizard
             onClose={() => setSetup(false)}
@@ -554,6 +700,7 @@ export default function App() {
             }}
           />
         )}
+        <Toasts />
         {showSettings && <SettingsDialog settings={settings} onChange={changeSettings} onClose={() => setShowSettings(false)} />}
       </div>
     </div>

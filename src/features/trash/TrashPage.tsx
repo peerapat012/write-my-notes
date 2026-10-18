@@ -1,3 +1,4 @@
+import { toastError } from '@/lib/toast'
 import { FileText, Presentation, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Dialog from '@/components/Dialog'
@@ -19,7 +20,7 @@ export default function TrashPage({ vault, entries, onChange }: Props) {
       await vault.restore(path)
       onChange()
     } catch (e) {
-      alert(`Could not restore: ${e}`)
+      toastError(`Could not restore: ${e}`)
     }
     reload()
   }
@@ -29,20 +30,20 @@ export default function TrashPage({ vault, entries, onChange }: Props) {
     try {
       await vault.delete(['.trash'])
     } catch (e) {
-      alert(`Could not empty trash: ${e}`)
+      toastError(`Could not empty trash: ${e}`)
     }
     reload()
   }
 
   if (!pages)
     return (
-      <div aria-label="Loading trash" className="mx-auto max-w-3xl space-y-3 px-16 pt-16">
+      <div aria-label="Loading trash" className="mx-auto max-w-3xl space-y-3 px-16 pt-8">
         {[60, 80, 50].map((w) => <div key={w} className={`${skeleton} h-8`} style={{ width: `${w}%` }} />)}
       </div>
     )
   if (!pages.length) return <EmptyState icon={Trash2} title="Trash is empty">Deleted pages wait here until you empty the trash.</EmptyState>
   return (
-    <div className="mx-auto max-w-3xl px-16 pt-16 pb-32">
+    <div className="mx-auto max-w-3xl px-16 pt-8 pb-32">
       <div className="mb-6 flex items-center">
         <h1 className="mr-auto text-[40px] leading-tight font-bold tracking-[-0.02em]">Trash</h1>
         <button className={secondaryButton} onClick={() => setConfirming(true)}>

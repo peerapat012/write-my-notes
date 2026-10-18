@@ -1,16 +1,14 @@
-import { PanelRightClose } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { iconButton } from './ui'
 
 type Tab = { id: string; label: string; content: ReactNode }
 
-/** Right-hand side panel with a tab strip; ticket 04 adds the History tab to `tabs`. */
-export default function RightPanel({ tabs, onClose }: { tabs: Tab[]; onClose: () => void }) {
+/** Right-hand side panel with a tab strip; its toggle lives in the page top bar. */
+export default function RightPanel({ tabs }: { tabs: Tab[] }) {
   const [active, setActive] = useState(tabs[0].id)
   const tab = tabs.find((t) => t.id === active) ?? tabs[0]
   return (
-    <aside aria-label="Side panel" className="print:hidden flex w-[300px] shrink-0 flex-col border-l border-neutral-200 bg-neutral-50">
-      <header className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-3">
+    <aside aria-label="Side panel" className="flex h-full w-[300px] flex-col border-l border-neutral-200 bg-neutral-50">
+      <header className="flex h-[var(--topbar-h)] shrink-0 items-center gap-0.5 px-2">
         <div role="tablist" className="mr-auto flex gap-1">
           {tabs.map((t) => (
             <button
@@ -24,9 +22,6 @@ export default function RightPanel({ tabs, onClose }: { tabs: Tab[]; onClose: ()
             </button>
           ))}
         </div>
-        <button className={iconButton} title="Hide panel" aria-label="Hide panel" onClick={onClose}>
-          <PanelRightClose size={16} />
-        </button>
       </header>
       <div role="tabpanel" className="min-h-0 flex-1 overflow-auto px-2 pb-3">
         {tab.content}

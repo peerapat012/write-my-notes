@@ -1,3 +1,4 @@
+import { toastError } from '@/lib/toast'
 import { FileText, Loader2, Presentation } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
@@ -71,7 +72,7 @@ export default function GraphPage({ vault, dark, refreshKey }: Props) {
     try {
       setPreview({ page: file.path, hash: commit.hash, date: commit.date, content: await showFile(commit.hash, file.path) })
     } catch (e) {
-      alert(`Could not open this file: ${e}`)
+      toastError(`Could not open this file: ${e}`)
     }
   }
 

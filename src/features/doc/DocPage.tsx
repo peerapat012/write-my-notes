@@ -29,6 +29,7 @@ import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
 import { skeleton } from '@/components/ui'
+import { setSaving } from '@/lib/saveStatus'
 import { relativePath, resolvePath, UNTITLED } from '@/lib/paths'
 import { readBoard } from '@/features/board/readBoard'
 import { parseIcon, parseIconColor } from '@/features/sidebar/tree'
@@ -219,6 +220,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           onHeadingsRef.current(headings(markdown))
           setEmpty(!markdown.trim())
           dirty.add(path)
+          setSaving(true)
           clearTimeout(timer)
           timer = setTimeout(() => save.current(), 500)
         }),
@@ -242,7 +244,10 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           .then(() => vault.write(path, content))
           .then(async () => {
             known = await vault.stat(path)
-            if (!timer) dirty.delete(path)
+            if (!timer) {
+              dirty.delete(path)
+              setSaving(false)
+            }
           })
         return writing
       }
@@ -346,7 +351,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const placeholderTitle = UNTITLED.test(title) // a page not named yet shows the "Title" placeholder
   const openPicker = (e: React.MouseEvent<HTMLElement>) => setPicker(e.currentTarget.getBoundingClientRect())
   return (
-    <div className="mx-auto max-w-3xl px-16 pt-16 pb-32">
+    <div className="fade-in mx-auto max-w-3xl px-10 pt-8 pb-32 md:px-16">
       <div className="group/head">
         {icon ? (
           <button
@@ -365,7 +370,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
             <SmilePlus size={16} strokeWidth={1.75} /> Add icon
           </button>
         )}
-        <h1 className="mb-4 text-[40px] leading-tight font-bold tracking-[-0.02em]">
+        <h1 className="mb-4 text-title font-bold tracking-[-0.02em]">
           <NameInput
             value={placeholderTitle ? '' : title}
             placeholder="Title"

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { Entry } from '@/features/sidebar/tree'
-import { buildRows, createdLabel, groupOf, sortRows } from './allPages'
+import { buildRows, createdLabel, groupOf, relativeTime, sortRows } from './allPages'
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).getTime()
 const NOW = at(2026, 10, 18, 9)
@@ -48,4 +48,13 @@ test('sorting by each column, both ways', () => {
   expect(paths('title', 'desc')).toEqual(['sketch.excalidraw', 'b.md', 'A/a.md'])
   expect(paths('created', 'desc')).toEqual(['b.md', 'A/a.md', 'sketch.excalidraw']) // the board has none: last
   expect(paths('created', 'asc')).toEqual(['sketch.excalidraw', 'A/a.md', 'b.md'])
+})
+
+test('relativeTime: seconds, minutes, hours, days', () => {
+  const now = 1_000_000_000_000
+  expect(relativeTime(now - 10_000, now)).toBe('just now')
+  expect(relativeTime(now - 120_000, now)).toBe('2 min ago')
+  expect(relativeTime(now - 3 * 3600_000, now)).toBe('3 hr ago')
+  expect(relativeTime(now - 86400_000, now)).toBe('yesterday')
+  expect(relativeTime(now - 5 * 86400_000, now)).toBe('5 days ago')
 })
