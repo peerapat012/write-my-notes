@@ -1,7 +1,7 @@
 import { splitFrontMatter } from './frontmatter'
 
 /** Plain text of a markdown doc: no front matter, block markers, inline marks, image or link targets. */
-function plainText(markdown: string) {
+export function plainText(markdown: string) {
   return splitFrontMatter(markdown)
     .body.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ') // images
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links keep their text

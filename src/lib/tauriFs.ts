@@ -23,7 +23,7 @@ async function listEntries(root: string, dir = ''): Promise<Entry[]> {
       out.push({ path, kind: 'dir' }, ...(await listEntries(root, path)))
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       const text = await readTextFile(await abs(root, path))
-      out.push({ path, kind: 'file', icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
+      out.push({ path, kind: 'file', mtime: (await stat(await abs(root, path))).mtime?.getTime(), icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }

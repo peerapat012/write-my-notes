@@ -24,6 +24,7 @@ import HistoryTab from '@/features/history/HistoryTab'
 import VersionView, { type Viewing } from '@/features/history/VersionView'
 import { showFile, type Version } from '@/lib/git'
 import GraphPage from '@/features/history/GraphPage'
+import AllPagesPage from '@/features/allpages/AllPagesPage'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
@@ -274,7 +275,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col text-sm">
-      {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page === '.history' ? 'History' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
+      {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page === '.all' ? 'All pages' : page === '.history' ? 'History' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
       <div className="flex min-h-0 flex-1">
         {sidebar ? (
           <Sidebar
@@ -320,16 +321,18 @@ export default function App() {
               go={go}
               onRename={(name) => rename(page, name)}
               onIconChange={() => open(root)}
-              onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text } : e)))}
+              onSave={(text) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, text, mtime: Date.now() } : e)))}
               onHeadings={setOutline}
               model={settings.model}
               openSettings={() => setShowSettings(true)}
               focusTitle={fresh === page}
             />
           ) : root && page?.endsWith('.excalidraw') ? (
-            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
+            <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts, mtime: Date.now() } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} focusTitle={fresh === page} onIconChange={() => open(root)} />
           ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
             <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
+          ) : root && page === '.all' ? (
+            <AllPagesPage entries={entries} go={go} />
           ) : root && page === '.trash' ? (
             <TrashPage vault={root} entries={entries} onChange={() => open(root)} />
           ) : loading ? null : root ? (

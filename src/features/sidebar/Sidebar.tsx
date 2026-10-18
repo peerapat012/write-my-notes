@@ -3,6 +3,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  LayoutList,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -113,6 +114,11 @@ export default function Sidebar({ root, stored, loading, tree, reopen, pickFolde
         <button className={footerRow} onClick={pickFolder}>
           <FolderOpen size={16} className="text-neutral-500" /> {root ? 'Open another folder' : 'Open folder'}
         </button>
+        {root && (
+          <button className={`${footerRow} ${props.page === '.all' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.all')}>
+            <LayoutList size={16} className="text-neutral-500" /> All pages
+          </button>
+        )}
         {root && (
           <button className={`${footerRow} ${props.page === '.trash' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.trash')}>
             <Trash2 size={16} className="text-neutral-500" /> Trash

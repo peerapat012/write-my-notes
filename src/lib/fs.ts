@@ -87,8 +87,9 @@ async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): Promise
       out.push({ path, kind: 'dir' }, ...(await listEntries(handle, path)))
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       // ponytail: reads every page on open; fine for personal-size folders, cache by lastModified if slow.
-      const text = await (await handle.getFile()).text()
-      out.push({ path, kind: 'file', icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
+      const file = await handle.getFile()
+      const text = await file.text()
+      out.push({ path, kind: 'file', mtime: file.lastModified, icon: parseIcon(name, text), iconColor: parseIconColor(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }
