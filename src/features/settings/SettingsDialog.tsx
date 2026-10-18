@@ -1,6 +1,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
 import Dialog from '@/components/Dialog'
 import { input, primaryButton } from '@/components/ui'
+import { isTauri } from '@/lib/fs'
 import { DEFAULT_MODEL, type Settings, type Theme } from './settings'
 
 const THEMES = [
@@ -57,7 +58,7 @@ export default function SettingsDialog({ settings, onChange, onClose }: Props) {
           spellCheck={false}
           onChange={(e) => onChange({ ...settings, key: e.target.value })}
         />
-        <span className="mt-1.5 block text-xs text-neutral-500">The key stays in this browser and is sent only to Google.</span>
+        <span className="mt-1.5 block text-xs text-neutral-500">The key stays {isTauri ? 'on this computer' : 'in this browser'} and is sent only to Google.</span>
       </label>
       <div className="mt-5 flex justify-end">
         <button autoFocus className={primaryButton} onClick={onClose}>

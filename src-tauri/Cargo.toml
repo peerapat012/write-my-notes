@@ -1,0 +1,20 @@
+[package]
+name = "notedflow"
+version = "0.1.0"
+description = "Notes in plain Markdown and Excalidraw files"
+edition = "2024"
+rust-version = "1.90"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "notedflow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.4", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"

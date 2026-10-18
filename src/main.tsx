@@ -1,6 +1,7 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './lib/desktop'
 import App from './App.tsx'
 
 // Dev-only component sheet at /dev/ui; the ternary drops it (and its chunk) from production builds.

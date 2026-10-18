@@ -47,10 +47,14 @@ function idb<T>(run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
 const saveRoot = (dir: FileSystemDirectoryHandle) => idb((s) => s.put(dir, 'root'))
 const loadRoot = () => idb<FileSystemDirectoryHandle | undefined>((s) => s.get('root'))
 
+/** Running inside the Tauri webview: folders come from the native dialog and `tauriFs`. */
+export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
 export type Stored = { name: string; reopen: () => Promise<Vault | undefined> }
 
 /** The folder saved by a previous session: `vault` if access is still granted, else `stored` (reopen needs a user gesture). */
 export async function restoreVault(): Promise<{ vault?: Vault; stored?: Stored }> {
+  if (isTauri) return (await import('./tauriFs')).restoreTauriVault()
   const dir = await loadRoot()
   if (!dir) return {}
   if ((await dir.queryPermission({ mode: 'readwrite' })) === 'granted') return { vault: fsAccess(dir) }
@@ -60,6 +64,7 @@ export async function restoreVault(): Promise<{ vault?: Vault; stored?: Stored }
 
 /** Folder picker; remembers the choice. Rejects with AbortError if the user cancels. */
 export async function pickVault() {
+  if (isTauri) return (await import('./tauriFs')).pickTauriVault()
   if (!('showDirectoryPicker' in window)) throw new Error('This browser cannot open folders. Use desktop Chrome or Edge on http://localhost.')
   const dir = await showDirectoryPicker({ mode: 'readwrite' })
   await saveRoot(dir)
@@ -126,6 +131,41 @@ const EMPTY_BOARD = JSON.stringify(
   2,
 )
 
+/** Starting contents of a new page file. */
+export const newPageContent = (type: 'doc' | 'board') =>
+  type === 'board' ? EMPTY_BOARD : `---
+created: ${new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16)}
+---
+`
+
+/** `img-<id>.<ext>` for a pasted image. */
+export function assetName(image: Blob) {
+  const ext = image.type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'png'
+  return `img-${crypto.randomUUID().slice(0, 8)}.${ext}`
+}
+
+/**
+ * The move shared by every `Vault`: refuses a clash (case-insensitive: on Windows "a.md" -> "A.md" is the same file,
+ * and copy + delete would lose it), moves the top-level entries with `moveEntry`, then writes the pages whose links changed.
+ */
+export async function moveWithLinks(
+  entries: Entry[],
+  from: string,
+  to: string,
+  io: { read(path: string): Promise<string>; write(path: string, data: string): Promise<void>; moveEntry(from: string, to: string): Promise<void> },
+) {
+  const moved = entries.filter((e) => movedPath(e.path, from, to) !== e.path)
+  const taken = new Set(entries.map((e) => e.path.toLowerCase()))
+  if (moved.some((e) => taken.has(movedPath(e.path, from, to).toLowerCase())) || movedPath(to, from, to) !== to) {
+    throw new Error(`"${to}" already exists or is inside "${from}"`)
+  }
+  const texts: Record<string, string> = {}
+  for (const e of entries) if (/\.(md|excalidraw)$/.test(e.path)) texts[e.path] = await io.read(e.path)
+  const rewritten = rewriteLinks(texts, from, to)
+  for (const e of moved) if (!moved.some((m) => e.path.startsWith(m.path + '/'))) await io.moveEntry(e.path, movedPath(e.path, from, to))
+  for (const [path, text] of Object.entries(rewritten)) await io.write(path, text)
+}
+
 async function copyInto(handle: FileSystemHandle, dir: FileSystemDirectoryHandle, name: string) {
   if (handle instanceof FileSystemFileHandle) return writeHandle(await dir.getFileHandle(name, { create: true }), await handle.getFile())
   const to = await dir.getDirectoryHandle(name, { create: true })
@@ -155,8 +195,7 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
     stat: async (path) => (await (await getFile(root, path)).getFile()).lastModified,
 
     async saveAsset(image) {
-      const ext = image.type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'png'
-      const name = `img-${crypto.randomUUID().slice(0, 8)}.${ext}`
+      const name = assetName(image)
       const assets = await root.getDirectoryHandle('assets', { create: true })
       await writeHandle(await assets.getFileHandle(name, { create: true }), image)
       return `assets/${name}`
@@ -166,27 +205,12 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
       const folder = await dirAt(root, dir, true)
       const fileName = name + (type === 'doc' ? '.md' : '.excalidraw')
       const file = await folder.getFileHandle(fileName, { create: true })
-      if ((await file.getFile()).size === 0)
-        await writeHandle(file, type === 'board' ? EMPTY_BOARD : `---
-created: ${new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16)}
----
-`)
+      if ((await file.getFile()).size === 0) await writeHandle(file, newPageContent(type))
       return dir ? `${dir}/${fileName}` : fileName
     },
 
     async move(from, to) {
-      const entries = await listEntries(root)
-      const moved = entries.filter((e) => movedPath(e.path, from, to) !== e.path)
-      // Case-insensitive: on Windows "a.md" -> "A.md" is the same file, and copy + delete would lose it.
-      const taken = new Set(entries.map((e) => e.path.toLowerCase()))
-      if (moved.some((e) => taken.has(movedPath(e.path, from, to).toLowerCase())) || movedPath(to, from, to) !== to) {
-        throw new Error(`"${to}" already exists or is inside "${from}"`)
-      }
-      const texts: Record<string, string> = {}
-      for (const e of entries) if (/\.(md|excalidraw)$/.test(e.path)) texts[e.path] = await read(e.path)
-      const rewritten = rewriteLinks(texts, from, to)
-      for (const e of moved) if (!moved.some((m) => e.path.startsWith(m.path + '/'))) await moveEntry(root, e.path, movedPath(e.path, from, to))
-      for (const [path, text] of Object.entries(rewritten)) await write(path, text)
+      await moveWithLinks(await listEntries(root), from, to, { read, write, moveEntry: (a, b) => moveEntry(root, a, b) })
     },
 
     async delete(paths) {
