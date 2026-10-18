@@ -5,14 +5,14 @@ import EmptyState from '@/components/EmptyState'
 import { dangerButton, ghostButton, secondaryButton, skeleton } from '@/components/ui'
 import type { Vault } from '@/lib/fs'
 
-type Props = { vault: Vault; onChange: () => void } // onChange: the page tree changed, rescan it
+type Props = { vault: Vault; entries: unknown; onChange: () => void } // entries: changes on every rescan, so the list reloads; onChange: the page tree changed, rescan it
 
 /** Trashed pages with their original path; restore one, or empty the whole trash. */
-export default function TrashPage({ vault, onChange }: Props) {
+export default function TrashPage({ vault, entries, onChange }: Props) {
   const [pages, setPages] = useState<string[]>()
   const [confirming, setConfirming] = useState(false)
   const reload = () => vault.listTrash().then(setPages)
-  useEffect(() => void reload(), [vault])
+  useEffect(() => void reload(), [vault, entries])
 
   async function restore(path: string) {
     try {

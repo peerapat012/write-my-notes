@@ -289,7 +289,7 @@ export default function App() {
           ) : root && page?.endsWith('.excalidraw') ? (
             <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
           ) : root && page === '.trash' ? (
-            <TrashPage vault={root} onChange={() => open(root)} />
+            <TrashPage vault={root} entries={entries} onChange={() => open(root)} />
           ) : loading ? null : root ? (
             <EmptyState icon={FileText} title="No page open" actions={newPage}>
               Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
