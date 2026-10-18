@@ -11,7 +11,9 @@ import type { Vault } from '@/lib/fs'
 import { resolvePath } from '@/lib/paths'
 import { openPage, pageAt, pageTarget } from '@/lib/pages'
 import { datatableView } from '@/features/doc/datatableView'
+import { tasksViewReadOnly } from '@/features/doc/tasksView'
 import { cardView } from '@/features/doc/linkView'
+import { calloutView } from '@/features/doc/calloutView'
 import { versionDate } from './versionDate'
 
 export type Viewing = { page: string; hash: string; date: string; content: string }
@@ -66,7 +68,7 @@ export function DocVersion({ vault, path, text, className = 'mx-auto max-w-3xl p
         },
       },
     })
-    crepe.editor.use(datatableView(path)).use(cardView(path))
+    crepe.editor.use(tasksViewReadOnly).use(datatableView(path)).use(cardView(path)).use(calloutView(() => {}))
     crepe.setReadonly(true)
     crepe.create()
     return () => void crepe.destroy()

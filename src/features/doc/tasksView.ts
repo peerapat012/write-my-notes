@@ -28,7 +28,9 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 }
 
 /** The editable table for `tasks`; `commit` gets the new list after each edit. */
-function render(tasks: Task[], commit: (tasks: Task[]) => void) {
+function render(tasks: Task[], commit?: (tasks: Task[]) => void) {
+  const ro = !commit // read-only (a version, a doc card): same table, nothing to edit
+  commit ??= () => {}
   const root = el('div', 'tasks-widget my-3 overflow-x-auto text-sm')
   root.contentEditable = 'false'
   const edit = (i: number, patch: Partial<Task>) => commit(tasks.map((t, j) => (j === i ? { ...t, ...patch } : t)))
@@ -46,10 +48,11 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
   tasks.forEach((task, i) => {
     const row = el('div', 'tasks-row grid min-w-[30rem] grid-cols-[minmax(8rem,1fr)_9rem_minmax(8rem,12rem)_2rem] border-b border-neutral-200 transition-colors duration-150 hover:bg-neutral-50')
 
-    const name = el('input', 'min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 outline-none hover:bg-neutral-100 focus:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-accent')
+    const name: HTMLInputElement = el('input', 'min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 outline-none hover:bg-neutral-100 focus:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-accent')
     name.value = task.name
     name.placeholder = 'Task'
     name.setAttribute('aria-label', 'Task name')
+    name.readOnly = ro
     name.onchange = () => edit(i, { name: name.value.trim() })
     name.onkeydown = (e) => e.key === 'Enter' && name.blur()
 
@@ -61,6 +64,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     status.insertAdjacentHTML('beforeend', icon(CHEVRON, 12))
     // An unknown status is kept as written until the user picks one.
     status.onclick = () =>
+      !ro &&
       openMenu(status, 'Status', [{ items: STATUSES.map((s) => ({ label: s, checked: s === task.status, onSelect: () => s !== task.status && edit(i, { status: s }) })) }])
 
     const tags = el('div', 'flex min-w-0 flex-1 flex-wrap items-center gap-1')
@@ -70,7 +74,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
       x.innerHTML = icon(X, 12)
       x.setAttribute('aria-label', `Remove tag ${tag}`)
       x.onclick = () => edit(i, { tags: task.tags.filter((t) => t !== tag) })
-      pill.append(x)
+      if (!ro) pill.append(x)
       tags.append(pill)
     }
     const add = el('input', 'print:hidden w-16 min-w-0 flex-1 bg-transparent py-0.5 text-xs outline-none placeholder:text-neutral-500')
@@ -83,7 +87,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
         if (!task.tags.includes(value)) edit(i, { tags: [...task.tags, value] })
       }
     }
-    tags.append(add)
+    if (!ro) tags.append(add)
 
     const del = el('button', 'print:hidden grid size-6 place-items-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900')
     del.innerHTML = icon(X)
@@ -91,14 +95,14 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     del.title = 'Delete task'
     del.onclick = () => commit(tasks.filter((_, j) => j !== i))
 
-    row.append(cell(name), cell(status), cell(tags), cell(del))
+    row.append(cell(name), cell(status), cell(tags), cell(...(ro ? [] : [del])))
     root.append(row)
   })
 
   const addRow = el('button', 'print:hidden flex h-[34px] w-full items-center gap-1.5 px-2 text-left text-neutral-500 transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-900')
   addRow.innerHTML = `${icon(PLUS)} New task`
   addRow.onclick = () => commit([...tasks, { name: '', status: 'Not started', tags: [] }])
-  root.append(addRow)
+  if (!ro) root.append(addRow)
   return root
 }
 
@@ -113,8 +117,9 @@ export function setText(view: EditorView, widgetPos: number, text: string) {
   view.dispatch(tr)
 }
 
-/** Milkdown plugin: every ```tasks code block is shown as an editable table. */
-export const tasksView = $prose(
+/** Milkdown plugin: every ```tasks code block is shown as an editable table (`readOnly`: a plain one). */
+const tasksPlugin = (readOnly: boolean) =>
+  $prose(
   () =>
     new Plugin({
       props: {
@@ -126,7 +131,7 @@ export const tasksView = $prose(
             const text = node.textContent
             decorations.push(
               Decoration.node(pos, end, { class: 'tasks-source' }),
-              Decoration.widget(end, (view, getPos) => render(parseTasks(text), (tasks) => setText(view, getPos()!, serializeTasks(tasks))), {
+              Decoration.widget(end, (view, getPos) => render(parseTasks(text), readOnly ? undefined : (tasks) => setText(view, getPos()!, serializeTasks(tasks))), {
                 side: -1,
                 key: text,
                 stopEvent: () => true,
@@ -140,3 +145,6 @@ export const tasksView = $prose(
       },
     }),
 )
+
+export const tasksView = tasksPlugin(false)
+export const tasksViewReadOnly = tasksPlugin(true)
