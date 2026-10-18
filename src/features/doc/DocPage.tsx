@@ -22,6 +22,7 @@ import TemplatePicker from '@/features/templates/TemplatePicker'
 import { fromTemplate } from '@/features/templates/templates'
 import { headings, type Heading } from './outline'
 import { NEW_TASKS } from './tasks'
+import { insertSourceBlock } from './insertSourceBlock'
 import { tasksView } from './tasksView'
 import { datatableView } from './datatableView'
 import { calloutItem, calloutView, setCalloutEmoji } from './calloutView'
@@ -197,23 +198,11 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
               }).addItem('tasks', {
                 label: 'Tasks',
                 icon: TASKS_ICON,
-                onRun: (ctx: Ctx) => {
-                  const commands = ctx.get(commandsCtx)
-                  commands.call(clearTextInCurrentBlockCommand.key)
-                  commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'tasks' } })
-                  const view = ctx.get(editorViewCtx)
-                  view.dispatch(view.state.tr.insertText(NEW_TASKS))
-                },
+                onRun: (ctx: Ctx) => insertSourceBlock(ctx, 'tasks', NEW_TASKS),
               }).addItem('datatable', {
                 label: 'Data table',
                 icon: TABLE_ICON,
-                onRun: (ctx: Ctx) => {
-                  const commands = ctx.get(commandsCtx)
-                  commands.call(clearTextInCurrentBlockCommand.key)
-                  commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'datatable' } })
-                  const view = ctx.get(editorViewCtx)
-                  view.dispatch(view.state.tr.insertText(NEW_TABLE))
-                },
+                onRun: (ctx: Ctx) => insertSourceBlock(ctx, 'datatable', NEW_TABLE),
               }).addItem('callout', calloutItem).addItem('mermaid', {
                 label: 'Mermaid',
                 icon: MERMAID_ICON,
