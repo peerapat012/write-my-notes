@@ -14,7 +14,7 @@ import {
   SquarePen,
   Trash2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { MenuButton, type MenuGroup } from '@/components/Menu'
 import NameInput from '@/components/NameInput'
 import { iconButton, skeleton } from '@/components/ui'
@@ -41,6 +41,7 @@ type SidebarProps = {
   openSettings: () => void
   openSearch: () => void
   hide: () => void
+  git?: ReactNode // desktop-only git status row, above the folder and settings rows
 }
 
 const newPage = (create: Create, dir: string): MenuGroup[] => [
@@ -55,7 +56,7 @@ const newPage = (create: Create, dir: string): MenuGroup[] => [
 const footerRow =
   'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-neutral-700 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900'
 
-export default function Sidebar({ root, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, ...props }: SidebarProps) {
+export default function Sidebar({ root, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
   const { create, move } = props
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
@@ -102,6 +103,7 @@ export default function Sidebar({ root, stored, loading, tree, reopen, pickFolde
         )}
       </nav>
       <footer className="shrink-0 border-t border-neutral-200 p-2">
+        {git}
         {stored && !root && (
           <button className={footerRow} onClick={reopen}>
             <RotateCcw size={16} className="text-neutral-500" /> <span className="truncate">Reopen “{stored.name}”</span>

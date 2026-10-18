@@ -70,7 +70,7 @@ export default function DocAi({ at, model, selection, onAccept, onClose, openSet
         {busy && <Loader2 size={14} className="shrink-0 animate-spin text-neutral-500" aria-label="Generating" />}
       </form>
       {error && (
-        <p role="alert" className="text-[13px] text-red-600">
+        <p role="alert" className="text-[13px] text-danger">
           {error}
         </p>
       )}

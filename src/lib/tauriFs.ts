@@ -86,7 +86,9 @@ export async function restoreTauriVault() {
   const root = localStorage.getItem(ROOT_KEY)
   if (!root) return {}
   try {
-    return { vault: await tauriVault(root) }
+    const vault = await tauriVault(root)
+    await readDir(root) // a folder deleted since last time is forgotten, not opened
+    return { vault }
   } catch {
     localStorage.removeItem(ROOT_KEY)
     return {}

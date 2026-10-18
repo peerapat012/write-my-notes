@@ -6,7 +6,7 @@ import { INVALID } from '@/components/NameInput'
 import { dangerButton, ghostButton, iconButton, input, primaryButton, secondaryButton } from '@/components/ui'
 import BoardPage from '@/features/board/BoardPage'
 import DocPage from '@/features/doc/DocPage'
-import { dirty, flushes, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
+import { dirty, flushes, isTauri, pickVault, restoreVault, type Stored, type Vault } from '@/lib/fs'
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
@@ -14,6 +14,7 @@ import type { BoardText } from '@/features/search/boardText'
 import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
+import GitFooter from '@/features/git/GitFooter'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
 
@@ -230,6 +231,7 @@ export default function App() {
           openSettings={() => setShowSettings(true)}
           openSearch={() => setShowSearch(true)}
           hide={toggleSidebar}
+          git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} /> : undefined}
         />
       ) : (
         <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
