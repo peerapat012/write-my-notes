@@ -20,6 +20,8 @@ import { duplicate, remove, turnInto, type BlockKind } from './blockActions'
 import { getProps, setIcon, setTags, splitFrontMatter } from './frontmatter'
 import { mermaidPreview } from './mermaid'
 import { headings, type Heading } from './outline'
+import { NEW_TASKS } from './tasks'
+import { tasksView } from './tasksView'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
 import NameInput from '@/components/NameInput'
@@ -52,6 +54,9 @@ async function boardPreview(vault: Vault, path: string, previews: Map<string, st
 
 /** Slash menu icon (lucide "workflow"); Crepe wants SVG markup, not a component. */
 const MERMAID_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>'
+
+/** Slash menu icon (lucide "list-checks"). */
+const TASKS_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>'
 
 /** Slash menu and toolbar icon (lucide "sparkles"). */
 const AI_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>'
@@ -167,6 +172,16 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
                   ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key)
                   openAi(ctx)
                 },
+              }).addItem('tasks', {
+                label: 'Tasks',
+                icon: TASKS_ICON,
+                onRun: (ctx: Ctx) => {
+                  const commands = ctx.get(commandsCtx)
+                  commands.call(clearTextInCurrentBlockCommand.key)
+                  commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'tasks' } })
+                  const view = ctx.get(editorViewCtx)
+                  view.dispatch(view.state.tr.insertText(NEW_TASKS))
+                },
               }).addItem('mermaid', {
                 label: 'Mermaid',
                 icon: MERMAID_ICON,
@@ -190,6 +205,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           },
         },
       })
+      crepe.editor.use(tasksView)
       // Match common hand-written markdown so saves don't churn git diffs.
       crepe.editor.config((ctx) => ctx.update(remarkStringifyOptionsCtx, (o) => ({ ...o, bullet: '-' as const, rule: '-' as const })))
       crepe.on((l) =>

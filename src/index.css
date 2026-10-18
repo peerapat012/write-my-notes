@@ -246,3 +246,8 @@ main .milkdown .mermaid-error {
   --icon-purple: #b49af0;
   --icon-pink: #ec86b9;
 }
+
+/* A ```tasks code block is shown through its table widget (src/features/doc/tasksView.ts); the source stays in the document. */
+.tasks-source {
+  display: none;
+}
