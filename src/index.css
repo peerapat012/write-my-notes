@@ -31,15 +31,15 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
-  /* Doc type scale: body 16/1.65, headings 32/24/20, page title 40. */
-  --text-body: 16px;
-  --text-body--line-height: 1.65;
-  --text-h1: 32px;
-  --text-h1--line-height: 1.25;
-  --text-h2: 24px;
-  --text-h2--line-height: 1.3;
-  --text-h3: 20px;
-  --text-h3--line-height: 1.4;
+  /* Doc type scale (AFFiNE's): body 15, headings 28/26/24 (H4-H6 22/20/18), line height 1em + 8px, page title 40. */
+  --text-body: 15px;
+  --text-body--line-height: calc(1em + 8px);
+  --text-h1: 28px;
+  --text-h1--line-height: calc(1em + 8px);
+  --text-h2: 26px;
+  --text-h2--line-height: calc(1em + 8px);
+  --text-h3: 24px;
+  --text-h3--line-height: calc(1em + 8px);
   --text-title: 40px;
   --text-title--line-height: 1.2;
 }
@@ -150,7 +150,7 @@ html {
   --crepe-shadow-2: var(--shadow-panel);
 }
 
-/* Doc type scale (tokens above). More space above a heading than below it (about 1.6 : 1). */
+/* Doc type scale (tokens above). H1 18/10, H2 14/10, H3 12/10 (px above/below). */
 main .milkdown .ProseMirror {
   padding: 0;
   font-size: var(--text-body);
@@ -162,15 +162,17 @@ main .milkdown .ProseMirror {
     margin: 0.6em 0;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 650;
-    letter-spacing: -0.015em;
+    font-weight: 600;
     padding: 0;
-    margin-bottom: 0.4em;
+    margin: 12px 0 10px;
+    line-height: calc(1em + 8px);
   }
-  h1 { font-size: var(--text-h1); line-height: var(--text-h1--line-height); margin-top: 1.1em; letter-spacing: -0.02em; font-weight: 700; }
-  h2 { font-size: var(--text-h2); line-height: var(--text-h2--line-height); margin-top: 1em; }
-  h3 { font-size: var(--text-h3); line-height: var(--text-h3--line-height); margin-top: 0.9em; }
-  h4, h5, h6 { font-size: 1em; line-height: 1.5; margin-top: 1em; }
+  h1 { font-size: var(--text-h1); line-height: var(--text-h1--line-height); margin-top: 18px; font-weight: 700; }
+  h2 { font-size: var(--text-h2); line-height: var(--text-h2--line-height); margin-top: 14px; }
+  h3 { font-size: var(--text-h3); line-height: var(--text-h3--line-height); }
+  h4 { font-size: 22px; }
+  h5 { font-size: 20px; }
+  h6 { font-size: 18px; }
   li { margin: 4px 0; }
   li p { margin: 0; }
   a {
@@ -196,6 +198,30 @@ main .milkdown .ProseMirror {
   }
   blockquote::before { display: none; } /* Crepe's colored side bar */
   blockquote p { margin: 0.3em 0; }
+  /* Callout (callout.ts): the marker paragraph is hidden, an emoji box sits in its place. */
+  blockquote.callout {
+    position: relative;
+    padding: 5px 10px 5px 44px;
+    margin: 8px 0;
+    border-radius: var(--radius-lg);
+  }
+  blockquote.callout p { margin: 0; }
+  .callout-marker { display: none; }
+  .callout-emoji {
+    position: absolute;
+    left: 10px;
+    top: 5px;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    font-size: 1.2em;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-out);
+  }
+  .callout-emoji:hover { background: var(--color-neutral-200); }
   img { border-radius: var(--radius-lg); }
   hr {
     border: 0;
@@ -229,19 +255,36 @@ main .milkdown :is(.milkdown-slash-menu, .milkdown-toolbar, .list-wrapper, .milk
   box-shadow: var(--shadow-panel);
   animation: menu-in var(--duration-panel) var(--ease-out);
 }
+/* Slash menu (AFFiNE): 280 wide, padding 8/4/8/8, max height 390, 28px icon tiles with a 1px border. */
 main .milkdown .milkdown-slash-menu {
-  padding: 4px;
-  .tab-group { border-color: var(--color-neutral-200); }
-  .menu-group h6 { font-size: 12px; font-weight: 500; color: var(--color-neutral-500); padding: 6px 8px 4px; text-transform: none; }
+  width: 280px;
+  padding: 8px 4px 8px 8px;
+  .tab-group { border-color: var(--color-neutral-200); padding: 0; }
+  .tab-group ul { padding: 0 0 6px; gap: 4px; }
+  .tab-group ul li { padding: 2px 8px; font-size: 12px; font-weight: 500; border-radius: 4px; }
+  .menu-groups { padding: 0 4px 0 0; max-height: 360px; }
+  .menu-group h6 { font-size: 12px; font-weight: 500; line-height: 20px; color: var(--color-neutral-500); padding: 2px 8px; text-transform: none; }
+  .menu-group + .menu-group::before { margin: 4px 0; }
   .menu-group li {
-    min-height: var(--row-h);
-    border-radius: var(--radius-md);
-    padding: 4px 8px;
+    min-width: 0;
+    min-height: 36px;
+    border-radius: 4px;
+    padding: 2px 8px;
     gap: 10px;
-    font-size: 14px;
   }
+  .menu-group li > span { font-size: 14px; font-weight: 400; line-height: 22px; }
   .menu-group li.hover, .menu-group li:hover { background: var(--color-neutral-100); }
-  .menu-group li svg { width: 16px; height: 16px; color: var(--color-neutral-500); }
+  .menu-group li svg {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    padding: 5px;
+    border: 1px solid var(--color-neutral-200);
+    border-radius: 4px;
+    background: var(--color-white);
+    color: var(--color-neutral-500);
+  }
 }
 main .milkdown .milkdown-toolbar {
   padding: 2px;
@@ -251,7 +294,9 @@ main .milkdown .milkdown-toolbar {
   .divider { background: var(--color-neutral-200); }
 }
 main .milkdown .milkdown-block-handle {
-  .operation-item { border-radius: var(--radius-md); color: var(--color-neutral-400); }
+  gap: 0;
+  .operation-item { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 4px; color: var(--color-neutral-400); }
+  .operation-item svg { width: 18px; height: 18px; }
   .operation-item:hover { background: var(--color-neutral-100); color: var(--color-neutral-700); }
 }
 
@@ -282,6 +327,9 @@ main .milkdown .milkdown-code-block {
     font-weight: 500;
   }
   .tools .language-button:hover { background: var(--color-neutral-100); }
+  /* Header: language on the left, Copy always on the right. */
+  .tools .tools-button-group > button { opacity: 1; border-radius: 4px; background: transparent; }
+  .tools .tools-button-group > button:hover { background: var(--color-neutral-100); }
   .cm-content, .cm-gutters { font-family: var(--font-mono); }
   .cm-gutters { color: var(--color-neutral-500); }
   .cm-activeLine, .cm-activeLineGutter { background: transparent; }

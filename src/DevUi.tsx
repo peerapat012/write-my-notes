@@ -2,6 +2,8 @@ import { ArrowDownUp, Copy, FileText, FolderOpen, Heading1, List, Pencil, Plus, 
 import { useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import Menu, { MenuRow } from '@/components/Menu'
+import DevEditor from './DevEditor'
+import LinkToolbar from '@/features/doc/LinkToolbar'
 import TableBlock from '@/features/doc/TableBlock'
 import { SAMPLE_TABLE } from '@/features/doc/datatable'
 import { ghostButton, iconButton, input, panel, primaryButton, secondaryButton, skeleton } from '@/components/ui'
@@ -24,6 +26,15 @@ function Sheet() {
   const [table, setTable] = useState(SAMPLE_TABLE)
   return (
     <div className="h-full space-y-8 bg-white p-8 text-neutral-900">
+      <Section title="Editor">
+        <DevEditor />
+      </Section>
+      <Section title="Link toolbar">
+        <div className="flex gap-4">
+          <LinkToolbar path="Plan.md" card={false} onText={noop} onCard={noop} onRemove={noop} />
+          <LinkToolbar path="Plan.md" card onText={noop} onRemove={noop} />
+        </div>
+      </Section>
       <Section title="Data table">
         <TableBlock text={table} commit={setTable} remove={noop} docPath="Dev.md" />
       </Section>

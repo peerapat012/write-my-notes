@@ -1,0 +1,42 @@
+import { Crepe, CrepeFeature } from '@milkdown/crepe'
+import '@milkdown/crepe/theme/common/style.css'
+import '@milkdown/crepe/theme/frame.css'
+import { useEffect, useRef } from 'react'
+import { calloutItem, calloutView } from '@/features/doc/calloutView'
+import { datatableView } from '@/features/doc/datatableView'
+import { tasksView } from '@/features/doc/tasksView'
+
+const SAMPLE = `# Heading 1
+
+## Heading 2
+
+### Heading 3
+
+Body text at 15px. A paragraph with a [link](https://example.com) and \`code\`.
+
+> 💡 [!callout]
+>
+> Callout body text.
+
+> A plain quote.
+
+\`\`\`ts
+const x = 1
+\`\`\`
+`
+
+/** Dev-only (`/dev/ui`): the doc editor without a vault, to check the block chrome (headings, slash menu, handle, callout, code block). */
+export default function DevEditor() {
+  const mount = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const crepe = new Crepe({ root: mount.current, defaultValue: SAMPLE, featureConfigs: { [CrepeFeature.BlockEdit]: { buildMenu: (b) => b.getGroup('advanced').addItem('callout', calloutItem) } } })
+    crepe.editor.use(tasksView).use(datatableView('Dev.md')).use(calloutView(() => {}))
+    crepe.create().then(() => ((window as unknown as { crepes: Crepe[] }).crepes ??= []).push(crepe)) // for checking the saved Markdown from the console
+    return () => void crepe.destroy()
+  }, [])
+  return (
+    <main className="relative pl-14">
+      <div ref={mount} />
+    </main>
+  )
+}

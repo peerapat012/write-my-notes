@@ -26,6 +26,7 @@ import { headings, type Heading } from './outline'
 import { NEW_TASKS } from './tasks'
 import { tasksView } from './tasksView'
 import { datatableView } from './datatableView'
+import { calloutItem, calloutView, setCalloutEmoji } from './calloutView'
 import { NEW_TABLE } from './datatable'
 import { countWords } from './wordCount'
 import { linkTarget } from '@/lib/links'
@@ -122,6 +123,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
   const editor = useRef<Crepe>(undefined)
   const [blockMenu, setBlockMenu] = useState<{ at: DOMRect; footer: string }>() // drag handle click menu
   const [mention, setMention] = useState<{ pos: number; at: DOMRect }>() // `@` page picker
+  const [calloutPicker, setCalloutPicker] = useState<{ pos: number; at: DOMRect }>() // callout emoji picker
   const [hover, setHover] = useState<{ at: DOMRect; target: string; pos: number }>() // page link toolbar
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [ai, setAi] = useState<{ at: DOMRect; from: number; to: number; selection: string; block?: boolean }>() // `/ai` popover
@@ -212,7 +214,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
                   const view = ctx.get(editorViewCtx)
                   view.dispatch(view.state.tr.insertText(NEW_TABLE))
                 },
-              }).addItem('mermaid', {
+              }).addItem('callout', calloutItem).addItem('mermaid', {
                 label: 'Mermaid',
                 icon: MERMAID_ICON,
                 onRun: (ctx: Ctx) => {
@@ -239,6 +241,7 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
         .use(tasksView)
         .use(datatableView(path))
         .use(cardView(path))
+        .use(calloutView((pos, at) => setCalloutPicker({ pos, at })))
         .use(mentionPlugin((pos, at) => setMention({ pos, at })))
       // Match common hand-written markdown so saves don't churn git diffs.
       crepe.editor.config((ctx) => ctx.update(remarkStringifyOptionsCtx, (o) => ({ ...o, bullet: '-' as const, rule: '-' as const })))
@@ -475,6 +478,13 @@ export default function DocPage({ vault, dark, path, exists, go, onRename, onIco
           </div>
         )}
       </div>
+      {calloutPicker && (
+        <IconPicker
+          anchor={calloutPicker.at}
+          onChange={(emoji) => editor.current?.editor.action((ctx) => setCalloutEmoji(ctx.get(editorViewCtx), calloutPicker.pos, emoji?.startsWith('lucide:') ? undefined : emoji))}
+          onClose={() => setCalloutPicker(undefined)}
+        />
+      )}
       {picker && <IconPicker anchor={picker} icon={icon} color={iconColor} onChange={changeIcon} onClose={() => setPicker(undefined)} />}
       {!ready && (
         <div aria-label="Loading page" className="space-y-3 pt-1">
