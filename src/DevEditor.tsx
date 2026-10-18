@@ -1,5 +1,7 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import { editorViewCtx } from '@milkdown/kit/core'
+import { commandsCtx, editorViewCtx } from '@milkdown/kit/core'
+import { addBlockTypeCommand, clearTextInCurrentBlockCommand, codeBlockSchema } from '@milkdown/kit/preset/commonmark'
+import { NEW_TABLE } from '@/features/doc/datatable'
 import { useEffect, useRef } from 'react'
 import { calloutItem, calloutView } from '@/features/doc/calloutView'
 import { datatableView } from '@/features/doc/datatableView'
@@ -52,6 +54,15 @@ export default function DevEditor() {
     crepe.create().then(() => {
       ;((window as unknown as { crepes: Crepe[] }).crepes ??= []).push(crepe)
       ;(window as unknown as { pmView: () => unknown }).pmView = () => crepe.editor.action((ctx) => ctx.get(editorViewCtx))
+      // The slash menu's Data table item, to check what inserting one looks like (same steps as DocPage).
+      ;(window as unknown as { insertDt: () => void }).insertDt = () =>
+        crepe.editor.action((ctx) => {
+          const commands = ctx.get(commandsCtx)
+          commands.call(clearTextInCurrentBlockCommand.key)
+          commands.call(addBlockTypeCommand.key, { nodeType: codeBlockSchema.type(ctx), attrs: { language: 'datatable' } })
+          const view = ctx.get(editorViewCtx)
+          view.dispatch(view.state.tr.insertText(NEW_TABLE))
+        })
     }) // for checking the saved Markdown from the console
     return () => void crepe.destroy()
   }, [])

@@ -112,7 +112,7 @@ export const cardView = (docPath: string) =>
               if (href === undefined) return node.isBlock && !node.isTextblock
               const target = pageTarget(docPath, href)
               decorations.push(
-                Decoration.node(pos, pos + node.nodeSize, { class: 'card-source' }),
+                Decoration.node(pos, pos + node.nodeSize, { class: 'card-source', style: 'display: none' }),
                 Decoration.widget(
                   pos,
                   (view, getPos) => {

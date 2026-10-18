@@ -130,7 +130,7 @@ const tasksPlugin = (readOnly: boolean) =>
             const end = pos + node.nodeSize
             const text = node.textContent
             decorations.push(
-              Decoration.node(pos, end, { class: 'tasks-source' }),
+              Decoration.node(pos, end, { class: 'tasks-source', style: 'display: none' }),
               Decoration.widget(end, (view, getPos) => render(parseTasks(text), readOnly ? undefined : (tasks) => setText(view, getPos()!, serializeTasks(tasks))), {
                 side: -1,
                 key: text,

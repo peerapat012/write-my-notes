@@ -26,7 +26,7 @@ export const datatableView = (docPath: string) =>
             if (node.type.name !== 'code_block' || node.attrs.language !== 'datatable') return
             const end = pos + node.nodeSize
             decorations.push(
-              Decoration.node(pos, end, { class: 'tasks-source' }),
+              Decoration.node(pos, end, { class: 'tasks-source', style: 'display: none' }),
               Decoration.widget(
                 end,
                 (view, getPos) => {

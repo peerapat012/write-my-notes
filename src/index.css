@@ -10,6 +10,9 @@
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Tailwind v4 gates `hover:` and `group-hover:` behind `@media (hover: hover)`. WebView2 on a touch or pen machine can
+   report no hover, and then every hover reveal (table tools, row buttons, handles) never shows. Plain :hover instead. */
+@custom-variant hover (&:hover);
 
 /* Crepe's reset used to cancel every outline inside the editor. In a lower layer it no longer does, and the global
    `:focus-visible` ring then framed the whole editor (and its blocks) whenever it had focus. Unlayered, so it wins. */
