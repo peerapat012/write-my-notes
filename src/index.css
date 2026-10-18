@@ -341,8 +341,9 @@ main .milkdown .mermaid-error {
 
 /* A ```tasks or ```datatable code block is shown through its widget (tasksView.ts, datatableView.ts), and a card
    link paragraph through its card (linkView.ts); the source stays in the document. */
-.tasks-source,
-.card-source {
+/* Prefixed to outrank Crepe's `.milkdown .milkdown-code-block { display: block }`. */
+.milkdown .tasks-source,
+.milkdown .card-source {
   display: none;
 }
 /* The page link toolbar replaces Crepe's link tooltip while it shows. */
