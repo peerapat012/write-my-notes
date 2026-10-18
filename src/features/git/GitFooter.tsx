@@ -2,9 +2,12 @@ import { ArrowDownToLine, ArrowUpFromLine, GitCommitHorizontal, Loader2 } from '
 import { useEffect, useState } from 'react'
 import Dialog from '@/components/Dialog'
 import { ghostButton, iconButton, input, primaryButton } from '@/components/ui'
-import { COMMIT_FIRST, commitAll, gitState, pull, push, type GitState } from '@/lib/git'
+import type { Mode } from '@/features/settings/settings'
+import { autoMessage, COMMIT_FIRST, commitAll, gitState, pull, push, type GitState } from '@/lib/git'
 
 type Props = {
+  /** Simple: plain words and an optional message. Advanced: git terms and a required message. */
+  mode: Mode
   /** Changes whenever pages change on disk or in the app; the status refreshes shortly after. */
   refreshKey: unknown
   /** Writes pending edits to disk, so a commit or pull sees them. */
@@ -16,11 +19,12 @@ type Props = {
 type Notice = { title: string; detail: string; terminal: boolean }
 
 /** Desktop sidebar row: how many files changed in the notes folder's git repo, with Commit, Pull and Push. */
-export default function GitFooter({ refreshKey, flush, onPulled }: Props) {
+export default function GitFooter({ mode, refreshKey, flush, onPulled }: Props) {
   const [state, setState] = useState<GitState>()
   const [committing, setCommitting] = useState(false)
   const [busy, setBusy] = useState<'pull' | 'push'>()
   const [notice, setNotice] = useState<Notice>()
+  const simple = mode === 'simple'
   const refresh = () => gitState().then(setState)
 
   // Debounced after saves, moves and rescans; the first check runs at once.
@@ -38,8 +42,13 @@ export default function GitFooter({ refreshKey, flush, onPulled }: Props) {
     try {
       if (what === 'pull') await flush()
       const failure = await (what === 'pull' ? pull() : push()).catch(String)
-      if (failure === COMMIT_FIRST) setNotice({ title: COMMIT_FIRST, detail: 'Pull needs a clean working tree. Commit your changes first.', terminal: false })
-      else if (failure) setNotice({ title: `Git ${what} failed`, detail: failure, terminal: true })
+      if (failure === COMMIT_FIRST)
+        setNotice(
+          simple
+            ? { title: 'Save a version first', detail: 'Getting updates needs your changes saved as a version first.', terminal: false }
+            : { title: COMMIT_FIRST, detail: 'Pull needs a clean working tree. Commit your changes first.', terminal: false },
+        )
+      else if (failure) setNotice({ title: simple ? `Could not ${what === 'pull' ? 'get' : 'send'} updates` : `Git ${what} failed`, detail: failure, terminal: true })
       else if (what === 'pull') await onPulled()
     } finally {
       setBusy(undefined)
@@ -71,13 +80,14 @@ export default function GitFooter({ refreshKey, flush, onPulled }: Props) {
         {icon}
         <span className="mr-auto truncate tabular-nums">{n ? `${n} changed` : 'No changes'}</span>
         <button className={`${ghostButton} h-6 px-2`} disabled={!n || !!busy} onClick={() => setCommitting(true)}>
-          Commit
+          {simple ? 'Save version' : 'Commit'}
         </button>
-        {syncButton('pull', ArrowDownToLine, 'Pull')}
-        {syncButton('push', ArrowUpFromLine, 'Push')}
+        {syncButton('pull', ArrowDownToLine, simple ? 'Get updates' : 'Pull')}
+        {syncButton('push', ArrowUpFromLine, simple ? 'Send updates' : 'Push')}
       </div>
       {committing && (
         <CommitDialog
+          simple={simple}
           count={n}
           flush={flush}
           onClose={() => {
@@ -110,7 +120,7 @@ export default function GitFooter({ refreshKey, flush, onPulled }: Props) {
   )
 }
 
-function CommitDialog({ count, flush, onClose }: { count: number; flush: () => Promise<unknown>; onClose: () => void }) {
+function CommitDialog({ simple, count, flush, onClose }: { simple: boolean; count: number; flush: () => Promise<unknown>; onClose: () => void }) {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -120,24 +130,24 @@ function CommitDialog({ count, flush, onClose }: { count: number; flush: () => P
     setBusy(true)
     setError('')
     await flush()
-    const failure = await commitAll(message.trim()).catch(String)
+    const failure = await commitAll(message.trim() || autoMessage(count)).catch(String)
     setBusy(false)
     if (failure) setError(failure)
     else onClose()
   }
 
   return (
-    <Dialog aria-label="Commit changes" onClose={onClose}>
+    <Dialog aria-label={simple ? 'Save version' : 'Commit changes'} onClose={onClose}>
       <form onSubmit={commit}>
-        <h2 className="font-semibold">Commit changes</h2>
+        <h2 className="font-semibold">{simple ? 'Save version' : 'Commit changes'}</h2>
         <p className="mt-1 text-neutral-700">
-          Commits all {count} changed {count === 1 ? 'file' : 'files'}.
+          {simple ? 'Saves' : 'Commits'} all {count} changed {count === 1 ? 'file' : 'files'}.
         </p>
         <input
           autoFocus
-          required
-          aria-label="Commit message"
-          placeholder="What changed?"
+          required={!simple}
+          aria-label={simple ? 'Note' : 'Commit message'}
+          placeholder={simple ? `Add a note (optional): ${autoMessage(count)}` : 'What changed?'}
           className={`${input} mt-3`}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -152,8 +162,8 @@ function CommitDialog({ count, flush, onClose }: { count: number; flush: () => P
           <button type="button" className={ghostButton} onClick={onClose}>
             Cancel
           </button>
-          <button className={primaryButton} disabled={busy || !message.trim()}>
-            {busy && <Loader2 size={14} className="animate-spin" />} Commit
+          <button className={primaryButton} disabled={busy || (!simple && !message.trim())}>
+            {busy && <Loader2 size={14} className="animate-spin" />} {simple ? 'Save' : 'Commit'}
           </button>
         </div>
       </form>

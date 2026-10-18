@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { parseStatus } from './git'
+import { autoMessage, parseStatus } from './git'
 
 test('modified, added, deleted and untracked files', () => {
   const out = ' M notes/a.md\nA  b.md\n D gone.md\n?? new page.md\n?? assets/\n'
@@ -26,4 +26,9 @@ test('quoted paths: quotes and utf-8 octal escapes are decoded', () => {
 test('clean tree and blank lines give nothing', () => {
   expect(parseStatus('')).toEqual([])
   expect(parseStatus('\n')).toEqual([])
+})
+
+test('auto message counts changed files', () => {
+  expect(autoMessage(2)).toBe('Edited 2 pages')
+  expect(autoMessage(1)).toBe('Edited 1 page')
 })

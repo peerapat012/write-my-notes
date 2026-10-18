@@ -2,13 +2,18 @@ import { Monitor, Moon, Sun } from 'lucide-react'
 import Dialog from '@/components/Dialog'
 import { input, primaryButton } from '@/components/ui'
 import { isTauri } from '@/lib/fs'
-import { DEFAULT_MODEL, type Settings, type Theme } from './settings'
+import { DEFAULT_MODEL, type Mode, type Settings, type Theme } from './settings'
 
 const THEMES = [
   ['light', Sun, 'Light'],
   ['dark', Moon, 'Dark'],
   ['system', Monitor, 'System'],
 ] as const
+
+const MODES: [Mode, string][] = [
+  ['simple', 'Simple'],
+  ['advanced', 'Advanced'],
+]
 
 type Props = { settings: Settings; onChange: (settings: Settings) => void; onClose: () => void }
 
@@ -37,6 +42,23 @@ export default function SettingsDialog({ settings, onChange, onClose }: Props) {
           ))}
         </div>
       </fieldset>
+      {isTauri && (
+        <fieldset className="mt-4">
+          <legend className="mb-1.5 text-neutral-500">Mode</legend>
+          <div className="grid grid-cols-2 gap-1 rounded-md bg-neutral-100 p-1">
+            {MODES.map(([value, label]) => (
+              <label
+                key={value}
+                className="flex h-7 cursor-pointer items-center justify-center rounded text-neutral-500 transition-colors duration-150 hover:text-neutral-900 has-checked:bg-white has-checked:text-neutral-900 has-checked:shadow-sm has-focus-visible:outline-2 has-focus-visible:outline-accent"
+              >
+                <input type="radio" name="mode" className="sr-only" checked={settings.mode === value} onChange={() => onChange({ ...settings, mode: value })} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <span className="mt-1.5 block text-xs text-neutral-500">Simple saves versions in plain words. Advanced uses git terms.</span>
+        </fieldset>
+      )}
       <label className="mt-4 block">
         <span className="mb-1.5 block text-neutral-500">Gemini model</span>
         <input

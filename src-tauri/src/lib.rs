@@ -22,19 +22,47 @@ struct GitOutput {
     stderr: String,
 }
 
-/// The only git invocations the webview may run. Anything else, including extra flags such as
-/// `--upload-pack=<cmd>` that would run a program, is rejected.
+/// `--format` strings for `log`. `src/lib/git.ts` sends the same ones.
+const FILE_LOG_FORMAT: &str = "--format=%H%x1f%an%x1f%aI%x1f%s";
+const GRAPH_LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s";
+
+fn digits(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 9 && s.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn hex(s: &str) -> bool {
+    (4..=64).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// A path or URL value: not empty, no leading `-` (it would read as a flag), no control characters.
+fn plain(s: &str) -> bool {
+    !s.is_empty() && !s.starts_with('-') && !s.chars().any(char::is_control)
+}
+
+/// The only git invocations the webview may run. Values sit only in fixed positions; anything else, including
+/// extra flags such as `--upload-pack=<cmd>` that would run a program, is rejected.
 fn allowed(args: &[String]) -> bool {
     let a: Vec<&str> = args.iter().map(String::as_str).collect();
-    matches!(
-        a.as_slice(),
+    match a.as_slice() {
         ["status", "--porcelain"]
-            | ["rev-parse", "--is-inside-work-tree"]
-            | ["add", "-A"]
-            | ["commit", "-m", _]
-            | ["pull", "--rebase"]
-            | ["push"]
-    )
+        | ["rev-parse", "--is-inside-work-tree"]
+        | ["add", "-A"]
+        | ["commit", "-m", _]
+        | ["pull", "--rebase"]
+        | ["push"]
+        | ["init"]
+        | ["remote", "get-url", "origin"]
+        | ["push", "-u", "origin", "HEAD"] => true,
+        // One file's history, then the whole graph; a page of `count` entries after skipping `skip`.
+        ["log", "--follow", FILE_LOG_FORMAT, "-n", count, "--skip", skip, "--", path] => digits(count) && digits(skip) && plain(path),
+        ["log", "--all", GRAPH_LOG_FORMAT, "-n", count, "--skip", skip] => digits(count) && digits(skip),
+        // A file as of a commit, and the files one commit changed.
+        ["show", spec] => spec.split_once(':').is_some_and(|(hash, path)| hex(hash) && plain(path)),
+        ["show", "--name-status", "--format=", hash] => hex(hash),
+        // `::` would select a transport helper such as `ext::`, which runs a program.
+        ["remote", "add", "origin", url] => plain(url) && !url.contains("::"),
+        _ => false,
+    }
 }
 
 /// Runs the system `git` in the notes folder and returns its exit code, stdout and stderr.
@@ -93,5 +121,51 @@ mod tests {
         assert!(!ok(&["-c", "core.sshCommand=calc", "push"]));
         assert!(!ok(&["commit", "-m", "a", "--amend"]));
         assert!(!ok(&[]));
+    }
+
+    const FILE: &str = "--format=%H%x1f%an%x1f%aI%x1f%s";
+    const GRAPH: &str = "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s";
+
+    #[test]
+    fn accepts_the_v3_shapes() {
+        assert!(ok(&["log", "--follow", FILE, "-n", "50", "--skip", "0", "--", "a/b c.md"]));
+        assert!(ok(&["log", "--all", GRAPH, "-n", "100", "--skip", "200"]));
+        assert!(ok(&["show", "abcdef0:notes/a.md"]));
+        assert!(ok(&["show", "--name-status", "--format=", "ABCDEF0123"]));
+        assert!(ok(&["init"]));
+        assert!(ok(&["remote", "add", "origin", "https://github.com/me/notes.git"]));
+        assert!(ok(&["remote", "add", "origin", "git@github.com:me/notes.git"]));
+        assert!(ok(&["remote", "get-url", "origin"]));
+        assert!(ok(&["push", "-u", "origin", "HEAD"]));
+    }
+
+    #[test]
+    fn rejects_flags_in_value_positions_and_bad_values() {
+        // other formats, non-numbers, flag-like paths, extra arguments
+        assert!(!ok(&["log", "--follow", "--format=%H", "-n", "5", "--skip", "0", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", FILE, "-n", "--output=x", "--skip", "0", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "-1", "--", "a.md"]));
+        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "0", "--", "--all"]));
+        assert!(!ok(&["log", "--follow", FILE, "-n", "5", "--skip", "0", "--", "a.md", "b.md"]));
+        assert!(!ok(&["log", "--all", GRAPH, "-n", "5", "--skip", "0", "--", "a.md"]));
+        assert!(!ok(&["log", "--all", GRAPH, "-n", "5"]));
+        assert!(!ok(&["show", "--output=x"]));
+        assert!(!ok(&["show", "HEAD:a.md"])); // not hex
+        assert!(!ok(&["show", "xyz1234:a.md"]));
+        assert!(!ok(&["show", "abcdef0:-x"]));
+        assert!(!ok(&["show", "abcdef0"]));
+        assert!(!ok(&["show", "abcdef0:a.md", "b"]));
+        assert!(!ok(&["show", "--name-status", "--format=", "HEAD"]));
+        assert!(!ok(&["show", "--name-status", "--format=", "abcdef0", "-p"]));
+        assert!(!ok(&["remote", "add", "origin", "--mirror"]));
+        assert!(!ok(&["remote", "add", "origin", "ext::sh -c calc"]));
+        assert!(!ok(&["remote", "add", "upstream", "https://x"]));
+        assert!(!ok(&["remote", "add", "origin", "https://x", "y"]));
+        assert!(!ok(&["remote", "get-url", "--all", "origin"]));
+        assert!(!ok(&["remote", "remove", "origin"]));
+        assert!(!ok(&["init", "--template=x"]));
+        assert!(!ok(&["push", "-u", "origin", "HEAD", "--force"]));
+        assert!(!ok(&["push", "-u", "evil", "HEAD"]));
+        assert!(!ok(&["push", "--force"]));
     }
 }

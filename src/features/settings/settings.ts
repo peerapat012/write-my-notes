@@ -1,5 +1,6 @@
 export type Theme = 'light' | 'dark' | 'system'
-export type Settings = { theme: Theme; model: string; key: string }
+export type Mode = 'simple' | 'advanced' // git wording and commit behavior
+export type Settings = { theme: Theme; model: string; key: string; mode: Mode }
 
 export const DEFAULT_MODEL = 'gemini-3.5-flash'
 const KEY = 'write-my-notes:settings'
@@ -15,6 +16,7 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): 
   return {
     theme: ['light', 'dark', 'system'].includes(saved.theme!) ? saved.theme! : 'system',
     model: (typeof saved.model === 'string' && saved.model.trim()) || DEFAULT_MODEL,
+    mode: saved.mode === 'advanced' ? 'advanced' : 'simple',
     key: typeof saved.key === 'string' ? saved.key.trim() : '',
   }
 }

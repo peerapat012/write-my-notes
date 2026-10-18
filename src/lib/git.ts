@@ -56,6 +56,9 @@ async function run(...args: string[]) {
   if (r.code !== 0) return (r.stderr || r.stdout).trim() || `git ${args[0]} failed (exit ${r.code})`
 }
 
+/** Simple mode's default message when the user types none. */
+export const autoMessage = (changed: number) => `Edited ${changed} ${changed === 1 ? 'page' : 'pages'}`
+
 /** `git add -A` then `git commit -m`. */
 export async function commitAll(message: string) {
   return (await run('add', '-A')) ?? run('commit', '-m', message)
@@ -72,3 +75,42 @@ export async function pull() {
 }
 
 export const push = () => run('push')
+
+// Shapes tickets 04–06 use. Each matches an entry in `allowed()` (src-tauri/src/lib.rs); they return stdout for the caller to parse.
+
+/** One record per line, fields split by U+001F. Same string as `FILE_LOG_FORMAT` in lib.rs. */
+export const FILE_LOG_FORMAT = '--format=%H%x1f%an%x1f%aI%x1f%s' // hash, author, date, subject
+/** Same string as `GRAPH_LOG_FORMAT` in lib.rs. */
+export const GRAPH_LOG_FORMAT = '--format=%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s' // hash, parents, author, date, refs, subject
+
+/** Runs git and returns stdout; throws git's error text on failure. */
+async function out(...args: string[]) {
+  const r = await git(...args)
+  if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim() || `git ${args[0]} failed (exit ${r.code})`)
+  return r.stdout
+}
+
+/** History of one file across renames, newest first: `count` entries after skipping `skip`. */
+export const fileLog = (path: string, count: number, skip: number) =>
+  out('log', '--follow', FILE_LOG_FORMAT, '-n', String(count), '--skip', String(skip), '--', path)
+
+/** History of every branch, newest first: `count` entries after skipping `skip`. */
+export const graphLog = (count: number, skip: number) => out('log', '--all', GRAPH_LOG_FORMAT, '-n', String(count), '--skip', String(skip))
+
+/** A file's contents as of commit `hash`. */
+export const showFile = (hash: string, path: string) => out('show', `${hash}:${path}`)
+
+/** The files one commit changed, as `<status>	<path>` lines. */
+export const showChanges = (hash: string) => out('show', '--name-status', '--format=', hash)
+
+export const init = () => out('init')
+export const addOrigin = (url: string) => out('remote', 'add', 'origin', url)
+
+/** URL of `origin`, or undefined when there is none. */
+export const originUrl = () =>
+  out('remote', 'get-url', 'origin').then(
+    (u) => u.trim(),
+    () => undefined,
+  )
+
+export const pushUpstream = () => out('push', '-u', 'origin', 'HEAD')

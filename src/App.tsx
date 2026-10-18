@@ -255,7 +255,7 @@ export default function App() {
             openSettings={() => setShowSettings(true)}
             openSearch={() => setShowSearch(true)}
             hide={toggleSidebar}
-            git={isTauri && root ? <GitFooter refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
+            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} /> : undefined}
           />
         ) : (
           <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
