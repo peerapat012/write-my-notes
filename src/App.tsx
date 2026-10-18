@@ -10,6 +10,7 @@ import { dirty, flushes, pickVault, restoreVault, type Stored, type Vault } from
 import { movedPath } from '@/lib/links'
 import { ext, join, pageUrl, parentOf } from '@/lib/paths'
 import SearchPalette from '@/features/search/SearchPalette'
+import type { BoardText } from '@/features/search/boardText'
 import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
@@ -34,12 +35,13 @@ export default function App() {
   const [entries, setEntries] = useState<Entry[]>([])
   const tree = useMemo(() => buildTree(entries), [entries])
   const exists = useMemo(() => new Set(entries.map((e) => e.path)), [entries])
-  // Rebuilt on every scan (open, focus rescan, move) and doc save.
+  // Rebuilt on every scan (open, focus rescan, move) and doc or board save.
   const index = useMemo<SearchIndex>(
-    () => new Map(entries.filter((e) => /\.(md|excalidraw)$/.test(e.path)).map((e) => [e.path, e.text ?? ''])),
+    () => new Map(entries.filter((e) => /\.(md|excalidraw)$/.test(e.path)).map((e) => [e.path, e.boardTexts ?? e.text ?? ''])),
     [entries],
   )
   const [page, setPage] = useState(currentPage)
+  const [zoomTo, setZoomTo] = useState<{ id: string }>() // board element a search hit asked to zoom to
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
   const [settings, setSettings] = useState(() => loadSettings())
   const [showSettings, setShowSettings] = useState(false)
@@ -126,7 +128,8 @@ export default function App() {
     if (dir) openFresh(dir)
   }
 
-  function go(path: string) {
+  function go(path: string, elementId?: string) {
+    setZoomTo(elementId ? { id: elementId } : undefined)
     history.pushState(null, '', pageUrl(path))
     setPage(path)
   }
@@ -256,7 +259,7 @@ export default function App() {
             openSettings={() => setShowSettings(true)}
           />
         ) : root && page?.endsWith('.excalidraw') ? (
-          <BoardPage key={page + rev} vault={root} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+          <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
         ) : loading ? null : root ? (
           <EmptyState icon={FileText} title="No page open" actions={newPage}>
             Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.

@@ -51,8 +51,9 @@ import { diskAction, dirty, flushes, type Vault } from '@/lib/fs'
 import NameInput from '@/components/NameInput'
 import { panel } from '@/components/ui'
 import { relativePath, resolvePath } from '@/lib/paths'
+import { searchTexts, type BoardText } from '@/features/search/boardText'
 
-type Props = { vault: Vault; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
+type Props = { vault: Vault; zoomTo?: { id: string }; onSave: (texts: BoardText[]) => void; openSettings: () => void; path: string; dark: boolean; model: string; onSummary: (doc: string) => Promise<void>; go: (path: string) => void; onRename: (name: string) => void }
 type Tool = Parameters<ExcalidrawImperativeAPI['setActiveTool']>[0]['type']
 
 const TOOLS: [Tool | 'sticky', LucideIcon, string][] = [
@@ -88,7 +89,7 @@ const DEFAULTS: Partial<AppState> = {
 }
 
 /** Loads one board file and autosaves it: 500 ms debounce, serialized writes, `dirty` while unsaved. */
-function boardFile(vault: Vault, path: string) {
+function boardFile(vault: Vault, path: string, onSave: (texts: BoardText[]) => void) {
   let api: ExcalidrawImperativeAPI | undefined
   let loaded = false
   let known = 0 // lastModified as of our last read or write
@@ -105,6 +106,7 @@ function boardFile(vault: Vault, path: string) {
     const app = { ...api!.getAppState(), viewBackgroundColor: '#ffffff' }
     const files = api!.getFiles()
     const json = serializeAsJSON(api!.getSceneElements(), app, files, 'local')
+    onSave(searchTexts(api!.getSceneElements()))
     writing = writing
       .then(async () => {
         for (const [id, f] of Object.entries(files))
@@ -175,9 +177,13 @@ export default function BoardPage(props: Props) {
   return <Board key={rev} {...props} reload={() => setRev((r) => r + 1)} />
 }
 
-function Board({ vault, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
+function Board({ vault, zoomTo, onSave, openSettings, path, dark, model, onSummary, go, onRename, reload }: Props & { reload: () => void }) {
   const box = useRef<HTMLDivElement>(null)
-  const [board] = useState(() => boardFile(vault, path))
+  const onSaveRef = useRef(onSave) // read by the autosave, which outlives App re-renders
+  useEffect(() => {
+    onSaveRef.current = onSave
+  })
+  const [board] = useState(() => boardFile(vault, path, (t) => onSaveRef.current(t)))
   const [icon, setIcon] = useState<string>()
   const [ui, setUi] = useState({ tool: 'selection', zoom: 100, selected: 0 })
   const [emojis, setEmojis] = useState(false)
@@ -199,6 +205,11 @@ function Board({ vault, openSettings, path, dark, model, onSummary, go, onRename
       board.flush() // flush pending edits when leaving the page
     }
   }, [board])
+  // A search hit: zoom to its element once the scene is up (and again for a new hit on the open board).
+  useEffect(() => {
+    const el = ready && zoomTo && board.api()?.getSceneElements().find((e) => e.id === zoomTo.id)
+    if (el) board.api()!.scrollToContent(el, { fitToContent: true, animate: true })
+  }, [board, ready, zoomTo])
   useEffect(() => {
     const onFocus = () => board.check(() => new Promise((r) => setConflict(() => r)), reload)
     addEventListener('focus', onFocus)

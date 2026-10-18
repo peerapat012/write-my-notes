@@ -1,9 +1,11 @@
 import { getProps, splitFrontMatter } from '@/features/doc/frontmatter'
+import type { BoardText } from './boardText'
 
-/** Search index: page path -> its text. Boards map to '' so only their titles are searched (no board text, v2). */
-export type SearchIndex = Map<string, string>
+/** Search index: page path -> a doc's text, or a board's texts. */
+export type SearchIndex = Map<string, string | BoardText[]>
 
-export type Hit = { path: string; title: string; snippet?: string }
+/** `elementId`: the board element to zoom to. */
+export type Hit = { path: string; title: string; snippet?: string; elementId?: string }
 
 const titleOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '')
 
@@ -15,7 +17,7 @@ export function search(index: SearchIndex, query: string, limit = 50): Hit[] {
     const tag = q.slice(1)
     const byTag: Hit[] = []
     for (const [path, text] of index)
-      if (path.endsWith('.md') && getProps(splitFrontMatter(text).front).tags.some((t) => t.toLowerCase().startsWith(tag))) byTag.push({ path, title: titleOf(path) })
+      if (typeof text === 'string' && path.endsWith('.md') && getProps(splitFrontMatter(text).front).tags.some((t) => t.toLowerCase().startsWith(tag))) byTag.push({ path, title: titleOf(path) })
     return byTag.sort((a, b) => a.title.localeCompare(b.title)).slice(0, limit)
   }
   const prefix: Hit[] = []
@@ -27,13 +29,15 @@ export function search(index: SearchIndex, query: string, limit = 50): Hit[] {
     if (t.startsWith(q)) prefix.push({ path, title })
     else if (t.includes(q)) inTitle.push({ path, title })
     else {
-      const body = splitFrontMatter(text).body
-      const at = body.toLowerCase().indexOf(q)
-      if (at < 0) continue
+      // A board hit is its first matching text, so one board is one row.
+      const found = typeof text === 'string' ? { body: splitFrontMatter(text).body } : text.map((t) => ({ body: t.text, id: t.id })).find((t) => t.body.toLowerCase().includes(q))
+      const at = found ? found.body.toLowerCase().indexOf(q) : -1
+      if (!found || at < 0) continue
+      const { body } = found
       const start = Math.max(0, at - 30)
       const end = at + q.length + 50
       const snippet = (start ? '…' : '') + body.slice(start, end).replace(/\s+/g, ' ').trim() + (end < body.length ? '…' : '')
-      inBody.push({ path, title, snippet })
+      inBody.push({ path, title, snippet, ...('id' in found && { elementId: found.id }) })
     }
   }
   const byTitle = (a: Hit, b: Hit) => a.title.localeCompare(b.title)

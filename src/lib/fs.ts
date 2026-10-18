@@ -1,3 +1,4 @@
+import { fileSearchTexts } from '@/features/search/boardText'
 import { movedPath, rewriteLinks } from './links'
 import { parseIcon, type Entry } from '@/features/sidebar/tree'
 
@@ -75,7 +76,7 @@ async function listEntries(dir: FileSystemDirectoryHandle, prefix = ''): Promise
     } else if (name.endsWith('.md') || name.endsWith('.excalidraw')) {
       // ponytail: reads every page on open; fine for personal-size folders, cache by lastModified if slow.
       const text = await (await handle.getFile()).text()
-      out.push({ path, kind: 'file', icon: parseIcon(name, text), text: name.endsWith('.md') ? text : undefined })
+      out.push({ path, kind: 'file', icon: parseIcon(name, text), ...(name.endsWith('.md') ? { text } : { boardTexts: fileSearchTexts(text) }) })
     } else {
       out.push({ path, kind: 'file' })
     }

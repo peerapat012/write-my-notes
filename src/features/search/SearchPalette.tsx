@@ -2,19 +2,19 @@ import { FileText, Presentation, Search } from 'lucide-react'
 import { useState } from 'react'
 import Dialog from '@/components/Dialog'
 import { MenuRow } from '@/components/Menu'
-import { search, type SearchIndex } from './search'
+import { search, type Hit, type SearchIndex } from './search'
 
-type Props = { index: SearchIndex; go: (path: string) => void; onClose: () => void }
+type Props = { index: SearchIndex; go: (path: string, elementId?: string) => void; onClose: () => void }
 
-/** Ctrl+K palette, open while mounted: type to search page titles and doc text, arrows + Enter (or click) to open. */
+/** Ctrl+K palette, open while mounted: type to search page titles, doc text and board text, arrows + Enter (or click) to open. */
 export default function SearchPalette({ index, go, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const hits = search(index, query)
 
-  function open(path: string) {
+  function open({ path, elementId }: Hit) {
     onClose()
-    go(path)
+    go(path, elementId)
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -22,7 +22,7 @@ export default function SearchPalette({ index, go, onClose }: Props) {
       e.preventDefault()
       const step = e.key === 'ArrowDown' ? 1 : -1
       setSelected((s) => (s + step + hits.length) % Math.max(hits.length, 1))
-    } else if (e.key === 'Enter' && hits[selected]) open(hits[selected].path)
+    } else if (e.key === 'Enter' && hits[selected]) open(hits[selected])
   }
 
   return (
@@ -60,7 +60,7 @@ export default function SearchPalette({ index, go, onClose }: Props) {
               hint={<span className="ml-auto max-w-[45%] shrink-0 truncate pl-3 text-xs text-neutral-500">{hit.path}</span>}
               detail={hit.snippet}
               onMouseMove={() => setSelected(i)}
-              onClick={() => open(hit.path)}
+              onClick={() => open(hit)}
             />
           ))}
           {!hits.length && <div className="px-2 py-1.5 text-neutral-500">No pages match “{query.trim()}”</div>}

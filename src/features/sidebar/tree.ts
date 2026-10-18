@@ -1,5 +1,7 @@
-/** `text`: a doc's contents, read at scan time for the search index. */
-export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string; text?: string }
+import type { BoardText } from '@/features/search/boardText'
+
+/** `text`: a doc's contents, `boardTexts`: a board's texts; both read at scan time for the search index. */
+export type Entry = { path: string; kind: 'file' | 'dir'; icon?: string; text?: string; boardTexts?: BoardText[] }
 
 export type TreeNode = {
   name: string
