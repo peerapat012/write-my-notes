@@ -13,19 +13,29 @@ import { versionDate } from './versionDate'
 
 export type Viewing = { page: string; hash: string; date: string; content: string }
 
-type Props = { vault: Vault; dark: boolean; view: Viewing; onRestore: () => void; onBack: () => void }
+type Props = {
+  vault: Vault
+  dark: boolean
+  view: Viewing
+  onRestore?: () => void // no Restore button without it
+  onBack: () => void
+  label?: string
+  backLabel?: string
+}
 
 /** An old version of the page shown read-only, under a bar to restore it or go back. */
-export default function VersionView({ vault, dark, view, onRestore, onBack }: Props) {
+export default function VersionView({ vault, dark, view, onRestore, onBack, label, backLabel = 'Back to current' }: Props) {
   return (
     <div className="flex h-full flex-col">
       <div role="status" className="flex h-11 shrink-0 items-center gap-2 border-b border-neutral-200 bg-accent-soft pr-14 pl-4 text-accent">
-        <span className="mr-auto truncate">Viewing version from {versionDate(view.date)}</span>
-        <button className={primaryButton} onClick={onRestore}>
-          Restore
-        </button>
+        <span className="mr-auto truncate">{label ?? `Viewing version from ${versionDate(view.date)}`}</span>
+        {onRestore && (
+          <button className={primaryButton} onClick={onRestore}>
+            Restore
+          </button>
+        )}
         <button className={ghostButton} onClick={onBack}>
-          Back to current
+          {backLabel}
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">

@@ -22,6 +22,7 @@ import GitFooter from '@/features/git/GitFooter'
 import HistoryTab from '@/features/history/HistoryTab'
 import VersionView, { type Viewing } from '@/features/history/VersionView'
 import { showFile, type Version } from '@/lib/git'
+import GraphPage from '@/features/history/GraphPage'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
@@ -272,7 +273,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col text-sm">
-      {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
+      {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page === '.history' ? 'History' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
       <div className="flex min-h-0 flex-1">
         {sidebar ? (
           <Sidebar
@@ -290,7 +291,7 @@ export default function App() {
             openSettings={() => setShowSettings(true)}
             openSearch={() => setShowSearch(true)}
             hide={toggleSidebar}
-            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} /> : undefined}
+            git={isTauri && root ? <GitFooter mode={settings.mode} refreshKey={entries} flush={() => Promise.all([...flushes].map((f) => f()))} onPulled={pulled} onSaved={() => setHistoryRev((r) => r + 1)} openGraph={() => go('.history')} /> : undefined}
           />
         ) : (
           <div className="flex w-11 shrink-0 flex-col items-center gap-0.5 border-r border-neutral-200 bg-neutral-50 py-2.5">
@@ -325,6 +326,8 @@ export default function App() {
             />
           ) : root && page?.endsWith('.excalidraw') ? (
             <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+          ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
+            <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
           ) : root && page === '.trash' ? (
             <TrashPage vault={root} entries={entries} onChange={() => open(root)} />
           ) : loading ? null : root ? (

@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpFromLine, GitCommitHorizontal, Loader2 } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, GitCommitHorizontal, History, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Dialog from '@/components/Dialog'
 import { ghostButton, iconButton, input, primaryButton } from '@/components/ui'
@@ -16,12 +16,14 @@ type Props = {
   onPulled: () => Promise<unknown>
   /** After a version is saved or pulled: the page history changed. */
   onSaved: () => void
+  /** Advanced mode: opens the whole-repo history view. */
+  openGraph: () => void
 }
 
 type Notice = { title: string; detail: string; terminal: boolean }
 
 /** Desktop sidebar row: how many files changed in the notes folder's git repo, with Commit, Pull and Push. */
-export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved }: Props) {
+export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved, openGraph }: Props) {
   const [state, setState] = useState<GitState>()
   const [committing, setCommitting] = useState(false)
   const [busy, setBusy] = useState<'pull' | 'push'>()
@@ -87,6 +89,11 @@ export default function GitFooter({ mode, refreshKey, flush, onPulled, onSaved }
         <button className={`${ghostButton} h-6 px-2`} disabled={!n || !!busy} onClick={() => setCommitting(true)}>
           {simple ? 'Save version' : 'Commit'}
         </button>
+        {!simple && (
+          <button className={iconButton} title="History" aria-label="History" onClick={openGraph}>
+            <History size={16} />
+          </button>
+        )}
         {syncButton('pull', ArrowDownToLine, simple ? 'Get updates' : 'Pull')}
         {syncButton('push', ArrowUpFromLine, simple ? 'Send updates' : 'Push')}
       </div>
