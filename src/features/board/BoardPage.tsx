@@ -374,7 +374,10 @@ function Board({ chatRef, docTexts, focusTitle, onIconChange, vault, zoomTo, onS
 
   /** Adds a doc card (an embeddable whose `link` is the doc's path relative to this board) centred on (x, y). */
   function addDocCard(doc: string, x: number, y: number) {
-    add([{ type: 'embeddable', x: x - DOC_CARD.w / 2, y: y - DOC_CARD.h / 2, width: DOC_CARD.w, height: DOC_CARD.h, link: relativePath(path, doc) }] as never)
+    // The converter leaves the style fields undefined on an embeddable, and Excalidraw's selection panel then crashes
+    // (white screen: `isTransparent`, `getSelectedGroupForElement`), so every one is set.
+    const style = { backgroundColor: 'transparent', strokeColor: 'transparent', fillStyle: 'solid', strokeWidth: 1, strokeStyle: 'solid', roughness: 0, opacity: 100, angle: 0, groupIds: [], frameId: null, roundness: null, boundElements: null, locked: false }
+    add([{ type: 'embeddable', ...style, x: x - DOC_CARD.w / 2, y: y - DOC_CARD.h / 2, width: DOC_CARD.w, height: DOC_CARD.h, link: relativePath(path, doc) }] as never)
   }
 
   // Sidebar drag (`text/x-page`, ticket 08) of a doc onto the board: add a doc card where it was dropped.
