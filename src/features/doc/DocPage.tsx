@@ -1,6 +1,4 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import '@milkdown/crepe/theme/common/style.css'
-import '@milkdown/crepe/theme/frame.css'
 import { exportToSvg } from '@excalidraw/excalidraw'
 import { commandsCtx, editorViewCtx, parserCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core'
 import type { Ctx } from '@milkdown/kit/ctx'

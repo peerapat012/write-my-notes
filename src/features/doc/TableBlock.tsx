@@ -372,7 +372,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
         )}
       </div>
       {view.type === 'table' && (
-      <div className="dt-scroll w-fit max-w-full overflow-x-auto rounded-lg border border-neutral-200 print:overflow-visible">
+      <div className="dt-scroll w-fit max-w-full overflow-x-auto border-t border-neutral-200 print:overflow-visible">
         <table role="grid" aria-label={table.title} className="border-separate border-spacing-0" style={{ tableLayout: 'fixed', width: (readOnly ? 0 : RAIL + ADD) + table.cols.reduce((n, _, i) => n + widthOf(i), 0) }}>
           <colgroup>
             {!readOnly && <col style={{ width: RAIL }} className="print:hidden" />}
@@ -383,7 +383,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </colgroup>
           <thead>
             <tr>
-              {!readOnly && <th className={`${cellBorder} bg-neutral-50 p-0 print:hidden`} />}
+              {!readOnly && <th className={`${cellBorder} p-0 print:hidden`} />}
               {table.cols.map((col, i) => {
                 const head = (
                   <>
@@ -395,7 +395,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                   </>
                 )
                 return (
-                  <th key={i} scope="col" className={`${cellBorder} relative bg-neutral-50 p-0 text-left text-sm font-medium text-neutral-700`}>
+                  <th key={i} scope="col" className={`${cellBorder} relative p-0 text-left text-sm font-normal text-neutral-500`}>
                     {readOnly ? (
                       <span className="flex h-[34px] items-center gap-1.5 px-1.5">{head}</span>
                     ) : (
@@ -418,7 +418,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                 )
               })}
               {!readOnly && (
-                <th className="min-w-10 border-b border-neutral-200 bg-neutral-50 p-0 print:hidden">
+                <th className="min-w-10 border-b border-neutral-200 p-0 print:hidden">
                   <button className="grid h-[34px] w-full place-items-center text-neutral-500 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900" title="Add column" aria-label="Add column" onClick={() => update((t) => insertColumn(t, t.cols.length))}>
                     <Plus size={16} />
                   </button>

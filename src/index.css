@@ -1,4 +1,11 @@
+/* Crepe's CSS sits in the lowest layer: its unlayered `.milkdown * { padding: 0; margin: 0 }` used to beat every
+   Tailwind utility on what our widgets draw inside the editor (the Data table, its menus). */
+@layer crepe, theme, base, components, utilities;
 @import "tailwindcss";
+@import "@milkdown/crepe/theme/common/style.css" layer(crepe);
+@import "@milkdown/crepe/theme/frame.css" layer(crepe);
+/* Not layered: it must keep beating CodeMirror's own injected theme (a dark `.cm-editor`). */
+@import "@milkdown/crepe/theme/common/code-mirror.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
@@ -389,10 +396,11 @@ main .milkdown .mermaid-error {
 
 /* A ```tasks or ```datatable code block is shown through its widget (tasksView.ts, datatableView.ts), and a card
    link paragraph through its card (linkView.ts); the source stays in the document. */
-/* Prefixed to outrank Crepe's `.milkdown .milkdown-code-block { display: block }`. */
+/* Must outrank Crepe's `.milkdown .milkdown-code-block { display: block }` whatever the stylesheet order is
+   (equal specificity lost to Crepe's later sheet in v3.4-01), so `!important`. */
 .milkdown .tasks-source,
 .milkdown .card-source {
-  display: none;
+  display: none !important;
 }
 /* The page link toolbar replaces Crepe's link tooltip while it shows. */
 .page-link-hover .milkdown-link-preview {

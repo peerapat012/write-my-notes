@@ -1,6 +1,4 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import '@milkdown/crepe/theme/common/style.css'
-import '@milkdown/crepe/theme/frame.css'
 import { useEffect, useRef } from 'react'
 import { calloutItem, calloutView } from '@/features/doc/calloutView'
 import { datatableView } from '@/features/doc/datatableView'
@@ -22,6 +20,13 @@ Body text at 15px. A paragraph with a [link](https://example.com) and \`code\`.
 
 \`\`\`ts
 const x = 1
+\`\`\`
+
+\`\`\`datatable
+@schema {"title":"Untitled","types":["text","text","text"]}
+| Title | Column | Column 2 |
+|---|---|---|
+|  |  |  |
 \`\`\`
 `
 

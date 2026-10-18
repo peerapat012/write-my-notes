@@ -119,7 +119,7 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
         onKeyDown(e)
       }}
       onClick={(e) => e.stopPropagation()} // React bubbles through the portal-less popover to the trigger's row
-      className={`${panel} ${anchor ? 'fixed inset-auto m-0' : 'relative'} ${width} overflow-hidden p-0 outline-none transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
+      className={`${panel} ${anchor ? 'fixed inset-auto m-0' : 'relative'} ${width} overflow-hidden !border-0 p-0 text-sm leading-[22px] font-normal outline-none transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
     >
       {header}
       {search && (
@@ -140,9 +140,9 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
           />
         </label>
       )}
-      <div id={`${id}-list`} role={search ? 'listbox' : undefined} className="max-h-[min(24rem,70vh)] overflow-auto p-1">
+      <div id={`${id}-list`} role={search ? 'listbox' : undefined} className="max-h-[min(24rem,70vh)] overflow-auto p-2">
         {shown.map((g, gi) => (
-          <div key={gi} role="group" aria-label={g.label} className={gi ? 'mt-1 border-t border-neutral-200 pt-1' : ''}>
+          <div key={gi} role="group" aria-label={g.label} className={`flex flex-col gap-1 ${gi ? 'mt-2 border-t border-neutral-200 pt-2' : ''}`}>
             {g.label && <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-neutral-500">{g.label}</div>}
             {g.items.map((item) => {
               const i = n++
@@ -212,7 +212,7 @@ type RowProps = { active: boolean; icon?: LucideIcon; leading?: ReactNode; label
 /** One menu row: icon, label, right-aligned hint, optional muted second line. Shared with the search palette. */
 export function MenuRow({ active, icon: Icon, leading, label, hint, detail, className = '', ...rest }: RowProps) {
   return (
-    <div {...rest} className={`cursor-pointer rounded-md px-2 py-1.5 text-sm ${active ? 'bg-neutral-100' : ''} ${className}`}>
+    <div {...rest} className={`cursor-pointer rounded p-1 text-sm leading-[22px] ${active ? 'bg-neutral-100' : ''} ${className}`}>
       <div className="flex min-w-0 items-center gap-2.5">
         {leading ?? (Icon && <Icon size={16} className={`shrink-0 ${active ? 'text-neutral-700' : 'text-neutral-500'}`} />)}
         <span className="truncate">{label}</span>
