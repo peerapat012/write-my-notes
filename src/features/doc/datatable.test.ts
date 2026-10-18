@@ -26,6 +26,14 @@ import {
   setCell,
   setColumnType,
   setColumnWidth,
+  insertRowWith,
+  monthGrid,
+  rowsByDate,
+  addView,
+  deleteView,
+  groupRows,
+  setViewColumn,
+  viewsOf,
   clampProgress,
   progressValue,
   MIN_COL_WIDTH,
@@ -233,4 +241,67 @@ test('progress column: round trip, clamp 0-100, non-number kept', () => {
   expect(progressValue('150')).toBe(100)
   expect(progressValue('soon')).toBe(0)
   expect(summaryText(t, 1)).toBe('AVERAGE 95') // (40 + 150) / 2: the file keeps what was written
+})
+
+const BOARD = `@schema {"types":["select","date"],"options":{"1":[{"n":"Todo","c":"gray"},{"n":"Done","c":"green"}]},"views":[{"type":"table"},{"type":"kanban","groupBy":1}]}
+| Title | Status | Due |
+|---|---|---|
+| a | Todo | 2026-10-20 |
+| b | Done |  |
+| c |  | 2026-10-20 |
+| d | Gone |  |`
+
+test('views: round trip, missing, unknown type ignored, bad groupBy falls back to Table', () => {
+  const t = parseTable(BOARD)
+  expect(t.views).toEqual([{ type: 'table' }, { type: 'kanban', groupBy: 1 }])
+  expect(parseTable(serializeTable(t))).toEqual(t)
+  // missing views: nothing written, one Table view
+  expect(parseTable(SPRINT).views).toBeUndefined()
+  expect(viewsOf(parseTable(SPRINT))).toEqual([{ type: 'table' }])
+  expect(serializeTable(parseTable(SPRINT))).not.toContain('"views"')
+  // a lone Table view is the default: not written
+  expect(serializeTable({ ...t, views: [{ type: 'table' }] })).not.toContain('"views"')
+  const odd = parseTable('@schema {"types":["select","text"],"views":[{"type":"gallery"},{"type":"kanban","groupBy":2},{"type":"kanban","groupBy":9},{"type":"calendar","groupBy":1},{"type":"kanban","groupBy":1}]}\n| Title | A | B |\n|---|---|---|')
+  expect(odd.views).toEqual([{ type: 'table' }, { type: 'table' }, { type: 'table' }, { type: 'kanban', groupBy: 1 }])
+})
+
+test('views follow column changes: shift, delete and retype fall back to Table', () => {
+  const t = parseTable(BOARD)
+  expect(insertColumn(t, 1).views?.[1]).toEqual({ type: 'kanban', groupBy: 2 })
+  expect(moveColumn(insertColumn(t, 3), 1, 1).views?.[1]).toEqual({ type: 'kanban', groupBy: 2 })
+  expect(deleteColumn(t, 2).views?.[1]).toEqual({ type: 'kanban', groupBy: 1 })
+  expect(deleteColumn(t, 1).views?.[1]).toEqual({ type: 'table' })
+  expect(setColumnType(t, 1, 'text').views?.[1]).toEqual({ type: 'table' })
+})
+
+test('add, delete and set the column of a view', () => {
+  const t = parseTable(SPRINT)
+  expect(addView(t, 'kanban').views).toEqual([{ type: 'table' }, { type: 'kanban', groupBy: 1 }])
+  expect(addView(t, 'calendar').views).toEqual([{ type: 'table' }, { type: 'calendar', groupBy: 2 }])
+  expect(addView(parseTable('| Title | A |\n|---|---|\n'), 'kanban').views).toBeUndefined() // no Select column
+  const b = parseTable(BOARD)
+  expect(deleteView(b, 1).views).toEqual([{ type: 'table' }])
+  expect(deleteView(deleteView(b, 1), 0).views).toEqual([{ type: 'table' }]) // never the last view
+  expect(setViewColumn(addView(t, 'kanban'), 1, 2).views?.[1]).toEqual({ type: 'kanban', groupBy: 1 }) // a Date column is not a Kanban column
+})
+
+test('groupRows: rows by option, the rest under no value', () => {
+  const t = parseTable(BOARD)
+  expect(groupRows(t, 1).map((g) => [g.option?.n, g.rows])).toEqual([['Todo', [0]], ['Done', [1]], [undefined, [2, 3]]])
+  expect(groupRows(t, 1, [1, 2]).map((g) => g.rows)).toEqual([[], [1], [2]])
+})
+
+test('calendar: month grid and rows by date', () => {
+  const grid = monthGrid(2026, 9) // October 2026: starts on a Thursday, Sunday-first weeks
+  expect(grid).toHaveLength(5)
+  expect(grid.every((w) => w.length === 7)).toBe(true)
+  expect(grid[0][0]).toBe('2026-09-27')
+  expect(grid[0][4]).toBe('2026-10-01')
+  expect(grid[4][6]).toBe('2026-10-31')
+  expect(monthGrid(2026, 1)[0][0]).toBe('2026-02-01') // February 2026 starts on a Sunday: 4 weeks
+  expect(monthGrid(2026, 1)).toHaveLength(4)
+  const t = parseTable(BOARD)
+  expect([...rowsByDate(t, 2)]).toEqual([['2026-10-20', [0, 2]]])
+  expect(rowsByDate(t, 2, [2]).get('2026-10-20')).toEqual([2])
+  expect(insertRowWith(t, { 2: '2026-10-05' }).rows.at(-1)).toEqual(['', '', '2026-10-05'])
 })

@@ -9,6 +9,9 @@ import {
   ArrowUp,
   ArrowUpNarrowWide,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Columns3,
   CircleChevronDown,
   Copy,
   FileText,
@@ -38,10 +41,12 @@ import PageChip from '@/components/PageChip'
 import PagePicker from '@/components/PagePicker'
 import Peek from '@/components/Peek'
 import { dangerButton, ghostButton, iconButton, input } from '@/components/ui'
+import { localDate } from '@/features/templates/daily'
 import { ICON_COLORS } from '@/lib/icons'
 import { pageLink, pageTarget } from '@/lib/pages'
 import {
   addOption,
+  addView,
   canMove,
   CHECKED,
   clampProgress,
@@ -49,21 +54,26 @@ import {
   DEFAULT_COL_WIDTH,
   deleteColumn,
   deleteRow,
+  deleteView,
   duplicateColumn,
   duplicateRow,
   fits,
+  groupRows,
   insertColumn,
   insertRow,
+  insertRowWith,
   isChecked,
   joinMulti,
   kindOf,
   MIN_COL_WIDTH,
+  monthGrid,
   moveColumn,
   pageLinks,
   progressValue,
   parseTable,
   recolorOption,
   removeOption,
+  rowsByDate,
   renameColumn,
   renameOption,
   rowMatches,
@@ -71,6 +81,7 @@ import {
   setCell,
   setColumnType,
   setColumnWidth,
+  setViewColumn,
   sortedRows,
   splitMulti,
   SUMMARY_LABELS,
@@ -79,9 +90,12 @@ import {
   TYPES,
   UNCHECKED,
   validDate,
+  viewColumns,
+  viewsOf,
   type ColType,
   type Column,
   type Table,
+  type ViewType,
 } from './datatable'
 
 const TYPE_INFO: Record<ColType, [string, LucideIcon]> = {
@@ -101,6 +115,8 @@ const TypeIcon = ({ col, size = 14 }: { col: Column; size?: number }) => createE
 const RAIL = 24 // left rail: row grip
 const ADD = 40 // add-column button
 const cellBorder = 'border-r border-b border-neutral-200'
+
+const VIEW_INFO: Record<ViewType, [string, LucideIcon]> = { table: ['Table', Table2], kanban: ['Kanban', Columns3], calendar: ['Calendar', Calendar] }
 
 type Update = (fn: (t: Table) => Table) => void
 
@@ -122,9 +138,17 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
   const [record, setRecord] = useState<number>() // row open in the Expand record peek
   const [confirmDelete, setConfirmDelete] = useState<number>() // column whose delete waits for a yes
   const [editOptions, setEditOptions] = useState<number>() // column whose options dialog is open
+  const [viewIndex, setViewIndex] = useState(0) // the open view tab (not saved)
   const [drag, setDrag] = useState<{ i: number; w: number }>() // column being resized, and its live width
   const root = useRef<HTMLDivElement>(null)
   const sorted = !!table.sort
+  const views = viewsOf(table)
+  const viewAt = Math.min(viewIndex, views.length - 1)
+  const view = views[viewAt]
+  const label = (i: number) => {
+    const same = views.filter((v) => v.type === views[i].type)
+    return VIEW_INFO[views[i].type][0] + (same.length > 1 ? ` ${same.indexOf(views[i]) + 1}` : '')
+  }
   const shown = sortedRows(table).filter((r) => rowMatches(table.rows[r], query))
 
   const focusCell = (r: number, c: number) => root.current?.querySelector<HTMLElement>(`[data-r="${r}"][data-c="${c}"]`)?.focus()
@@ -227,6 +251,24 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
     },
   ]
 
+  /** The ··· menu of the open view: its column (Kanban group by, Calendar date), Clear sort (Table), Delete view. */
+  const viewMenu = (): MenuGroup[] => [
+    ...(view.type === 'table'
+      ? [{ items: [{ label: 'Clear sort', icon: X, disabled: !sorted, onSelect: () => update((t) => ({ ...t, sort: undefined })) }] }]
+      : [
+          {
+            items: [
+              {
+                label: view.type === 'kanban' ? 'Group by' : 'Date column',
+                icon: view.type === 'kanban' ? Columns3 : Calendar,
+                children: [{ items: viewColumns(table, view.type).map((i) => ({ label: table.cols[i].name, icon: iconOf(table.cols[i]), checked: view.groupBy === i, onSelect: () => update((t) => setViewColumn(t, viewAt, i)) })) }],
+              },
+            ],
+          },
+        ]),
+    { items: [{ label: 'Delete view', icon: Trash2, danger: true, disabled: views.length < 2, onSelect: () => { update((t) => deleteView(t, viewAt)); setViewIndex(0) } }] },
+  ]
+
   const widthOf = (i: number) => (drag?.i === i ? drag.w : (table.cols[i].w ?? DEFAULT_COL_WIDTH))
   const smallButton = 'grid size-6 place-items-center rounded-md text-neutral-500 transition-colors duration-150 hover:bg-neutral-200 hover:text-neutral-900'
 
@@ -251,9 +293,43 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
         )}
       </div>
       <div className="flex h-9 items-center gap-1 border-b border-neutral-200 print:hidden">
-        <span role="tab" aria-selected className="-mb-px flex h-9 items-center gap-1.5 border-b-2 border-neutral-900 px-1 font-medium">
-          <Table2 size={16} className="text-neutral-500" /> Table View
-        </span>
+        <div role="tablist" aria-label="Views" className="flex items-center gap-1">
+          {views.map((v, i) => {
+            const Icon = VIEW_INFO[v.type][1]
+            return (
+              <button
+                key={i}
+                role="tab"
+                aria-selected={i === viewAt}
+                className={`-mb-px flex h-9 shrink-0 items-center gap-1.5 border-b-2 px-1.5 transition-colors duration-150 ${i === viewAt ? 'border-neutral-900 font-medium text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
+                onClick={() => setViewIndex(i)}
+              >
+                <Icon size={16} className="text-neutral-500" /> {label(i)}
+              </button>
+            )
+          })}
+          {!readOnly && (
+            <MenuButton
+              label="Add view"
+              className={iconButton}
+              groups={[
+                {
+                  items: (['table', 'kanban', 'calendar'] as const).map((type) => ({
+                    label: VIEW_INFO[type][0] + (type !== 'table' && !viewColumns(table, type).length ? ` (needs a ${type === 'kanban' ? 'Select' : 'Date'} column)` : ''),
+                    icon: VIEW_INFO[type][1],
+                    disabled: type !== 'table' && !viewColumns(table, type).length,
+                    onSelect: () => {
+                      update((t) => addView(t, type))
+                      setViewIndex(views.length)
+                    },
+                  })),
+                },
+              ]}
+            >
+              <Plus size={16} />
+            </MenuButton>
+          )}
+        </div>
         <span className="flex-1" />
         {!readOnly && (
           <>
@@ -286,7 +362,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
                 <Search size={16} />
               </button>
             )}
-            <MenuButton label="View options" className={iconButton} groups={[{ items: [{ label: 'Clear sort', icon: X, disabled: !sorted, onSelect: () => update((t) => ({ ...t, sort: undefined })) }] }]}>
+            <MenuButton label="View options" className={iconButton} groups={viewMenu()}>
               <MoreHorizontal size={16} />
             </MenuButton>
             <button className="ml-1 inline-flex h-7 items-center gap-1 rounded-md bg-accent px-2.5 text-sm font-medium text-on-accent transition-colors duration-150 hover:bg-accent/90" onClick={() => addRow()}>
@@ -295,6 +371,7 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </>
         )}
       </div>
+      {view.type === 'table' && (
       <div className="dt-scroll w-fit max-w-full overflow-x-auto rounded-lg border border-neutral-200 print:overflow-visible">
         <table role="grid" aria-label={table.title} className="border-separate border-spacing-0" style={{ tableLayout: 'fixed', width: (readOnly ? 0 : RAIL + ADD) + table.cols.reduce((n, _, i) => n + widthOf(i), 0) }}>
           <colgroup>
@@ -432,6 +509,13 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
           </tfoot>
         </table>
       </div>
+      )}
+      {view.type === 'calendar' && view.groupBy !== undefined && (
+        <CalendarView t={table} col={view.groupBy} rows={shown} update={update} readOnly={readOnly} open={setRecord} />
+      )}
+      {view.type === 'kanban' && view.groupBy !== undefined && (
+        <Kanban t={table} col={view.groupBy} rows={shown} update={update} readOnly={readOnly} open={setRecord} />
+      )}
       {record !== undefined && table.rows[record] && (
         <Peek label="Record" onClose={() => setRecord(undefined)} buttons={[]}>
           <div className="mx-auto max-w-2xl px-10 pt-12 pb-16" onKeyDown={(e) => e.stopPropagation()}>
@@ -485,6 +569,158 @@ export default function TableBlock({ text, commit, remove, docPath, readOnly }: 
       {editOptions !== undefined && table.cols[editOptions] && <OptionsDialog col={table.cols[editOptions]} i={editOptions} update={update} onClose={() => setEditOptions(undefined)} />}
     </div>
   )
+}
+
+/** Kanban view: one column per option of Select column `col`; drag a card to another column to change its value. */
+function Kanban({ t, col, rows, update, readOnly, open }: { t: Table; col: number; rows: number[]; update: Update; readOnly?: boolean; open: (r: number) => void }) {
+  const [over, setOver] = useState<number>() // column the dragged card is over
+  const groups = groupRows(t, col, rows)
+  const others = t.cols.map((_, i) => i).filter((i) => i > 0 && i !== col)
+  return (
+    <div className="dt-scroll flex items-start gap-3 overflow-x-auto py-3 print:overflow-visible">
+      {groups.map((g, gi) => (
+        <section
+          key={g.option?.n ?? ''}
+          aria-label={g.option?.n ?? `No ${t.cols[col].name}`}
+          className={`w-[260px] shrink-0 rounded-lg p-2 transition-colors duration-150 ${over === gi ? 'bg-accent-soft' : 'bg-neutral-50'}`}
+          onDragOver={(e) => {
+            if (readOnly) return
+            e.preventDefault()
+            setOver(gi)
+          }}
+          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOver(undefined)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setOver(undefined)
+            const r = Number(e.dataTransfer.getData('text/plain'))
+            if (!readOnly && Number.isInteger(r) && t.rows[r] && t.rows[r][col].trim() !== (g.option?.n ?? '')) update((tt) => setCell(tt, r, col, g.option?.n ?? ''))
+          }}
+        >
+          <header className="flex h-7 items-center gap-2 px-1">
+            {g.option ? <Pill name={g.option.n} col={t.cols[col]} /> : <span className="text-xs font-medium text-neutral-500">No {t.cols[col].name}</span>}
+            <span className="text-xs text-neutral-500 tabular-nums">{g.rows.length}</span>
+            <span className="flex-1" />
+            {!readOnly && (
+              <button className={`${iconButton} size-6 print:hidden`} title="New record" aria-label={`New record in ${g.option?.n ?? 'no value'}`} onClick={() => update((tt) => insertRowWith(tt, { [col]: g.option?.n ?? '' }))}>
+                <Plus size={14} />
+              </button>
+            )}
+          </header>
+          <ul className="mt-1 space-y-2">
+            {g.rows.map((r) => {
+              const shown = others.filter((i) => t.rows[r][i]?.trim() && fits(t.cols[i], t.rows[r][i])).slice(0, 3)
+              return (
+                <li key={r}>
+                  <button
+                    draggable={!readOnly}
+                    className="block w-full cursor-pointer rounded-lg border border-neutral-200 bg-white p-2.5 text-left shadow-sm transition-colors duration-150 hover:bg-neutral-50 active:cursor-grabbing"
+                    onClick={() => open(r)}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', String(r))
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragEnd={() => setOver(undefined)}
+                  >
+                    <span className={`block truncate font-medium ${t.rows[r][0].trim() ? '' : 'text-neutral-500'}`}>{t.rows[r][0].trim() || 'Untitled'}</span>
+                    {shown.map((i) => (
+                      <span key={i} className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-700">
+                        <TypeIcon col={t.cols[i]} size={12} />
+                        <span className="min-w-0 flex-1 truncate">{cardText(t.cols[i], t.rows[r][i])}</span>
+                      </span>
+                    ))}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+const WEEKDAYS = Array.from({ length: 7 }, (_, d) => new Date(Date.UTC(2023, 0, 1 + d)).toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' }))
+const MAX_PER_DAY = 3
+
+/** Calendar view: a month grid over Date column `col`; click a day to add a record dated that day. */
+function CalendarView({ t, col, rows, update, readOnly, open }: { t: Table; col: number; rows: number[]; update: Update; readOnly?: boolean; open: (r: number) => void }) {
+  const today = localDate()
+  const [[year, month], setMonth] = useState(() => [Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1])
+  const byDay = rowsByDate(t, col, rows)
+  const shift = (n: number) =>
+    setMonth(() => {
+      const d = new Date(Date.UTC(year, month + n, 1))
+      return [d.getUTCFullYear(), d.getUTCMonth()]
+    })
+  const title = new Date(Date.UTC(year, month, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const add = (day: string) => !readOnly && update((tt) => insertRowWith(tt, { [col]: day }))
+  return (
+    <div className="py-3">
+      <div className="mb-2 flex items-center gap-1 print:hidden">
+        <h4 className="mr-2 text-sm font-semibold">{title}</h4>
+        <button className={iconButton} title="Previous month" aria-label="Previous month" onClick={() => shift(-1)}>
+          <ChevronLeft size={16} />
+        </button>
+        <button className="h-7 rounded-md px-2 text-sm text-neutral-700 transition-colors duration-150 hover:bg-neutral-100" onClick={() => setMonth([Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1])}>
+          Today
+        </button>
+        <button className={iconButton} title="Next month" aria-label="Next month" onClick={() => shift(1)}>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+      <div role="grid" aria-label={title} className="overflow-hidden rounded-lg border border-neutral-200">
+        <div role="row" className="grid grid-cols-7 bg-neutral-50">
+          {WEEKDAYS.map((d) => (
+            <div key={d} role="columnheader" className="h-8 border-b border-neutral-200 px-2 text-xs leading-8 font-medium text-neutral-700">
+              {d}
+            </div>
+          ))}
+        </div>
+        {monthGrid(year, month).map((week) => (
+          <div key={week[0]} role="row" className="grid grid-cols-7">
+            {week.map((day, i) => {
+              const items = byDay.get(day) ?? []
+              const inMonth = Number(day.slice(5, 7)) - 1 === month
+              return (
+                <div
+                  key={day}
+                  role="gridcell"
+                  aria-label={day}
+                  className={`group/day min-h-24 min-w-0 border-b border-neutral-200 p-1 ${i < 6 ? 'border-r' : ''} ${inMonth ? '' : 'bg-neutral-50'} ${readOnly ? '' : 'cursor-pointer'}`}
+                  onClick={() => add(day)}
+                >
+                  <div className="flex h-6 items-center justify-between px-1">
+                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-xs tabular-nums ${day === today ? 'bg-accent font-medium text-on-accent' : inMonth ? 'text-neutral-700' : 'text-neutral-400'}`}>{Number(day.slice(8))}</span>
+                    {!readOnly && (
+                      <button className="grid size-5 place-items-center rounded text-neutral-500 opacity-0 transition-opacity duration-150 group-hover/day:opacity-100 hover:bg-neutral-100 focus-visible:opacity-100 print:hidden" title="New record" aria-label={`New record on ${day}`} onClick={(e) => (e.stopPropagation(), add(day))}>
+                        <Plus size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <ul className="space-y-0.5">
+                    {items.slice(0, MAX_PER_DAY).map((r) => (
+                      <li key={r}>
+                        <button className="block w-full truncate rounded bg-neutral-100 px-1.5 py-0.5 text-left text-xs transition-colors duration-150 hover:bg-neutral-200" onClick={(e) => (e.stopPropagation(), open(r))}>
+                          {t.rows[r][0].trim() || 'Untitled'}
+                        </button>
+                      </li>
+                    ))}
+                    {items.length > MAX_PER_DAY && <li className="px-1.5 text-xs text-neutral-500">+{items.length - MAX_PER_DAY} more</li>}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** A cell's value as card text: page links as their titles, a checked box as its column name. */
+const cardText = (col: Column, v: string) => {
+  const kind = kindOf(col)
+  return kind === 'page' ? pageLinks(v).map((l) => l.title).join(', ') : kind === 'checkbox' ? (isChecked(v) ? 'Checked' : 'Unchecked') : kind === 'progress' ? `${progressValue(v)}%` : v.trim()
 }
 
 /** An input that commits on Enter or blur (not on every keystroke), so the block is not rewritten while typing. */

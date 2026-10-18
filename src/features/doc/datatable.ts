@@ -11,7 +11,12 @@ export type Column = { name: string; type: string; options?: Option[]; summary?:
 export const DEFAULT_COL_WIDTH = 180
 export const MIN_COL_WIDTH = 100
 export type Sort = { col: number; dir: 'asc' | 'desc' }
-export type Table = { title: string; cols: Column[]; rows: string[][]; sort?: Sort }
+/** A view of the table. Kanban groups by a Select column, Calendar lays rows out by a Date column (`groupBy`, a column index). */
+export const VIEW_TYPES = ['table', 'kanban', 'calendar'] as const
+export type ViewType = (typeof VIEW_TYPES)[number]
+export type View = { type: ViewType; groupBy?: number }
+/** `views` missing means one Table view. */
+export type Table = { title: string; cols: Column[]; rows: string[][]; sort?: Sort; views?: View[] }
 
 /** What a column behaves as: Title and unknown types are Text. */
 export const kindOf = (col: Column): ColType => (TYPES as readonly string[]).includes(col.type) ? (col.type as ColType) : 'text'
@@ -23,6 +28,7 @@ type Schema = {
   sort?: Sort
   summary?: Record<string, string>
   w?: Record<string, number>
+  views?: { type: string; groupBy?: unknown }[]
 }
 
 export function parseTable(text: string): Table {
@@ -50,7 +56,7 @@ export function parseTable(text: string): Table {
     if (typeof w === 'number' && Number.isFinite(w) && w >= MIN_COL_WIDTH) c.w = Math.round(w)
   })
   const sort = schema.sort && schema.sort.col >= 0 && schema.sort.col < cols.length ? schema.sort : undefined
-  return { title: schema.title ?? 'Untitled', cols, rows: rows.map((r) => cols.map((_, i) => r[i] ?? '')), sort }
+  return { title: schema.title ?? 'Untitled', cols, rows: rows.map((r) => cols.map((_, i) => r[i] ?? '')), sort, views: normalizeViews(Array.isArray(schema.views) ? schema.views : undefined, cols) }
 }
 
 export function serializeTable(t: Table) {
@@ -62,6 +68,8 @@ export function serializeTable(t: Table) {
   if (Object.keys(summary).length) schema.summary = summary
   const w = Object.fromEntries(t.cols.flatMap((c, i) => (c.w ? [[i, c.w]] : [])))
   if (Object.keys(w).length) schema.w = w
+  const views = normalizeViews(t.views, t.cols)
+  if (views && !(views.length === 1 && views[0].type === 'table')) schema.views = views
   const line = (c: string[]) => `| ${c.map(cell).join(' | ')} |`
   return [`@schema ${JSON.stringify(schema)}`, line(t.cols.map((c) => c.name)), `|${t.cols.map(() => '---').join('|')}|`, ...t.rows.map(line)].join('\n')
 }
@@ -98,6 +106,7 @@ export function insertColumn(t: Table, at: number, col: Column = { name: columnN
     cols: splice(t.cols, at, 0, col),
     rows: t.rows.map((r, i) => splice(r, at, 0, values?.[i] ?? '')),
     sort: remapSort(t.sort, (i) => (i >= at ? i + 1 : i)),
+    views: remapViews(t, [...t.cols.slice(0, at), col, ...t.cols.slice(at)], (i) => (i >= at ? i + 1 : i)),
   }
 }
 
@@ -109,13 +118,83 @@ export const renameColumn = (t: Table, i: number, name: string): Table => ({
 /** Sets a column's width, never below the minimum. */
 export const setColumnWidth = (t: Table, i: number, w: number): Table => mapCol(t, i, (c) => ({ ...c, w: Math.max(MIN_COL_WIDTH, Math.round(w)) }))
 
+// Views
+
+const VIEW_KIND = { kanban: 'select', calendar: 'date' } as const
+
+/** Views with each Kanban or Calendar view kept only if its column is still there and of the right type; the others become Table. */
+export function normalizeViews(views: { type: string; groupBy?: unknown }[] | undefined, cols: Column[]): View[] | undefined {
+  const out = (views ?? []).flatMap((v): View[] => {
+    if (!(VIEW_TYPES as readonly string[]).includes(v.type)) return []
+    const type = v.type as ViewType
+    if (type === 'table') return [{ type }]
+    const i = v.groupBy
+    const ok = typeof i === 'number' && Number.isInteger(i) && i >= 1 && i < cols.length && kindOf(cols[i]) === VIEW_KIND[type]
+    return [ok ? { type, groupBy: i } : { type: 'table' }]
+  })
+  return out.length ? out : undefined
+}
+
+/** `t`'s views after a column change: `cols` are the new columns, `map` gives an old column's new index (undefined: gone). */
+const remapViews = (t: Table, cols: Column[], map: (i: number) => number | undefined) =>
+  normalizeViews(t.views?.map((v) => ({ ...v, groupBy: v.groupBy === undefined ? undefined : map(v.groupBy) })), cols)
+
+export const viewsOf = (t: Table): View[] => t.views ?? [{ type: 'table' }]
+
+/** Columns a Kanban (Select) or Calendar (Date) view can use. */
+export const viewColumns = (t: Table, type: ViewType) => t.cols.flatMap((c, i) => (i >= 1 && type !== 'table' && kindOf(c) === VIEW_KIND[type] ? [i] : []))
+
+/** Adds a view on the first fitting column; unchanged when the table has none. */
+export function addView(t: Table, type: ViewType): Table {
+  const groupBy = viewColumns(t, type)[0]
+  if (type !== 'table' && groupBy === undefined) return t
+  return { ...t, views: [...viewsOf(t), type === 'table' ? { type } : { type, groupBy }] }
+}
+
+/** Removes view `i`; the last one stays. */
+export const deleteView = (t: Table, i: number): Table => (viewsOf(t).length < 2 ? t : { ...t, views: viewsOf(t).filter((_, j) => j !== i) })
+
+/** Points view `i` at column `col`, if its type can use it. */
+export const setViewColumn = (t: Table, i: number, col: number): Table =>
+  viewsOf(t)[i]?.type !== 'table' && viewColumns(t, viewsOf(t)[i].type).includes(col) ? { ...t, views: viewsOf(t).map((v, j) => (j === i ? { ...v, groupBy: col } : v)) } : t
+
+export type Group = { option?: Option; rows: number[] }
+
+/** Kanban columns: `rows` (default all) grouped by the options of Select column `col`, then those with no (known) value. */
+export function groupRows(t: Table, col: number, rows = t.rows.map((_, i) => i)): Group[] {
+  const groups: Group[] = (t.cols[col].options ?? []).map((option) => ({ option, rows: [] }))
+  const none: Group = { rows: [] }
+  for (const r of rows) (groups.find((g) => g.option!.n === t.rows[r][col].trim()) ?? none).rows.push(r)
+  return [...groups, none]
+}
+
+/** The weeks of a month (`month` 0-11), Sunday first, as `YYYY-MM-DD`; days of the neighbouring months pad the first and last week. */
+export function monthGrid(year: number, month: number): string[][] {
+  const first = Date.UTC(year, month, 1)
+  const lead = new Date(first).getUTCDay()
+  const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  return Array.from({ length: Math.ceil((lead + days) / 7) }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => new Date(first + (w * 7 + d - lead) * 864e5).toISOString().slice(0, 10)),
+  )
+}
+
+/** Calendar: row indices (of `rows`, default all) by the date in column `col`; a cell that is not a valid date is left out. */
+export function rowsByDate(t: Table, col: number, rows = t.rows.map((_, i) => i)) {
+  const days = new Map<string, number[]>()
+  for (const r of rows) {
+    const day = t.rows[r][col].trim()
+    if (validDate(day)) days.set(day, [...(days.get(day) ?? []), r])
+  }
+  return days
+}
+
 export const canMove = (t: Table, i: number, dir: -1 | 1) => i >= 1 && i + dir >= 1 && i + dir < t.cols.length
 
 export function moveColumn(t: Table, i: number, dir: -1 | 1): Table {
   if (!canMove(t, i, dir)) return t
   const j = i + dir
   const swap = <T>(list: T[]) => list.map((x, k) => (k === i ? list[j] : k === j ? list[i] : x))
-  return { ...t, cols: swap(t.cols), rows: t.rows.map(swap), sort: remapSort(t.sort, (k) => (k === i ? j : k === j ? i : k)) }
+  return { ...t, cols: swap(t.cols), rows: t.rows.map(swap), sort: remapSort(t.sort, (k) => (k === i ? j : k === j ? i : k)), views: remapViews(t, swap(t.cols), (k) => (k === i ? j : k === j ? i : k)) }
 }
 
 export function duplicateColumn(t: Table, i: number): Table {
@@ -133,6 +212,7 @@ export function deleteColumn(t: Table, i: number): Table {
     cols: t.cols.filter((_, j) => j !== i),
     rows: t.rows.map((r) => r.filter((_, j) => j !== i)),
     sort: remapSort(t.sort, (k) => (k === i ? undefined : k > i ? k - 1 : k)),
+    views: remapViews(t, t.cols.filter((_, j) => j !== i), (k) => (k === i ? undefined : k > i ? k - 1 : k)),
   }
 }
 
@@ -147,13 +227,16 @@ export function setColumnType(t: Table, i: number, type: ColType): Table {
     for (const r of t.rows) for (const v of type === 'select' ? [r[i].trim()] : splitMulti(r[i])) if (v) col = addOptionTo(col, v)
   }
   if (col.summary && !summariesFor(type).includes(col.summary)) col.summary = undefined
-  return { ...t, cols: t.cols.map((c, j) => (j === i ? col : c)) }
+  const cols = t.cols.map((c, j) => (j === i ? col : c))
+  return { ...t, cols, views: normalizeViews(t.views, cols) }
 }
 
 // Rows
 
 const emptyRow = (t: Table) => t.cols.map(() => '')
 export const insertRow = (t: Table, at: number): Table => ({ ...t, rows: splice(t.rows, at, 0, emptyRow(t)) })
+/** A new last row with `values` (by column index) filled in. */
+export const insertRowWith = (t: Table, values: Record<number, string>): Table => ({ ...t, rows: [...t.rows, t.cols.map((_, i) => values[i] ?? '')] })
 export const duplicateRow = (t: Table, r: number): Table => ({ ...t, rows: splice(t.rows, r + 1, 0, [...t.rows[r]]) })
 export const deleteRow = (t: Table, r: number): Table => ({ ...t, rows: t.rows.filter((_, i) => i !== r) })
 export const setCell = (t: Table, r: number, c: number, value: string): Table => ({
@@ -327,7 +410,7 @@ export function summaryText(t: Table, i: number) {
 }
 
 /** Dev sheet sample (/dev/ui): every column type, so the grid can be checked by eye. */
-export const SAMPLE_TABLE = `@schema {"title":"Sprint","types":["select","date","checkbox","number","link","progress"],"options":{"1":[{"n":"Not started","c":"gray"},{"n":"Done","c":"green"}]},"summary":{"1":"empty%"}}
+export const SAMPLE_TABLE = `@schema {"title":"Sprint","types":["select","date","checkbox","number","link","progress"],"options":{"1":[{"n":"Not started","c":"gray"},{"n":"Done","c":"green"}]},"summary":{"1":"empty%"},"views":[{"type":"table"},{"type":"kanban","groupBy":1},{"type":"calendar","groupBy":2}]}
 | Title | Status | Due | Done | Points | Site | Progress |
 |---|---|---|---|---|---|---|
 | Write the spec | Done | 2026-10-20 | [x] | 3 | https://example.com | 100 |
