@@ -8,12 +8,12 @@ export type Task = { name: string; status: string; tags: string[] }
 export const statusOf = (status: string): Status => STATUSES.find((s) => s === status) ?? 'Not started'
 
 /** Cells of one table line. A `|` inside a cell is written `\|`. */
-function cells(line: string) {
+export function cells(line: string) {
   const inner = line.trim().replace(/^\|/, '').replace(/\|$/, (end, at, all) => (all[at - 1] === '\\' ? end : ''))
   return inner.split(/(?<!\\)\|/).map((c) => c.replace(/\\\|/g, '|').trim())
 }
 
-const cell = (text: string) => text.replace(/\s*\n\s*/g, ' ').replace(/\|/g, '\\|')
+export const cell = (text: string) => text.replace(/\s*\n\s*/g, ' ').replace(/\|/g, '\\|')
 
 /** Tasks of a ```tasks block's text: a GFM table with the columns Task, Status, Tags. Other lines are ignored. */
 export function parseTasks(text: string): Task[] {
