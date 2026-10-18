@@ -1,9 +1,10 @@
-import { Check, Eye, History, Loader2, Plus, Send, Sparkles, Undo2, X } from 'lucide-react'
+import { Check, ChevronDown, Eye, History, Loader2, Plus, Send, Sparkles, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { applyChange, FUNCTIONS, historyContents, keepFront, newChat, runTurn, systemPrompt, undoChange, type ApplyMode, type Change, type Chat, type Env, type Message } from '@/ai/chat'
 import { chatStore, recentChats } from '@/ai/chatStore'
 import type { Mode } from '@/ai/create'
 import { chatTurn, geminiKey, NO_KEY } from '@/ai/gemini'
+import { MenuButton } from '@/components/Menu'
 import { ghostButton, iconButton } from '@/components/ui'
 import { createdStamp, type Vault } from '@/lib/fs'
 import { localDate } from '@/features/templates/daily'
@@ -31,6 +32,10 @@ type Props = {
 
 const MODE_KEY = 'write-my-notes:chat-mode'
 const name = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '')
+const MODES: [ApplyMode, string][] = [
+  ['approve', 'Approve'],
+  ['auto', 'Auto'],
+]
 const stored = (): ApplyMode => (localStorage.getItem(MODE_KEY) === 'auto' ? 'auto' : 'approve')
 
 /** Right panel tab: chat about the open page (and pages added with @); the AI edits through functions, with or without approval. */
@@ -165,22 +170,28 @@ export default function ChatTab({ vault, page, pages, pageText, model, openSetti
         }}
       />
       <div className="mt-1 flex items-center gap-2">
-        <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+        <span className="flex items-center gap-1.5 text-xs text-neutral-500">
           Changes
-          <select
-            aria-label="Apply changes"
-            className="h-7 rounded-md border border-neutral-200 bg-transparent px-1.5 text-xs text-neutral-900"
-            value={mode}
-            onChange={(e) => {
-              const next = e.target.value as ApplyMode
-              localStorage.setItem(MODE_KEY, next)
-              setMode(next)
-            }}
+          <MenuButton
+            label="Apply changes"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-neutral-200 pr-1.5 pl-2 text-xs text-neutral-900 transition-colors duration-150 hover:bg-neutral-100"
+            groups={[
+              {
+                items: MODES.map(([value, label]) => ({
+                  label,
+                  checked: mode === value,
+                  onSelect: () => {
+                    localStorage.setItem(MODE_KEY, value)
+                    setMode(value)
+                  },
+                })),
+              },
+            ]}
           >
-            <option value="approve">Approve</option>
-            <option value="auto">Auto</option>
-          </select>
-        </label>
+            {MODES.find(([value]) => value === mode)?.[1]}
+            <ChevronDown size={12} className="text-neutral-500" />
+          </MenuButton>
+        </span>
         <button className={`${iconButton} ml-auto`} disabled={busy || noKey || !input.trim()} title="Send" aria-label="Send">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </button>

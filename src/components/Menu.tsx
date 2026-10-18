@@ -1,8 +1,19 @@
-import { type LucideIcon, Search } from 'lucide-react'
+import { Check, ChevronRight, type LucideIcon, Search } from 'lucide-react'
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 import { panel, shortcut } from './ui'
 
-export type MenuItem = { label: string; icon?: LucideIcon; shortcut?: string; onSelect: () => void }
+/** `checked`: a pick-a-value item; true draws the check mark of the current value. `children`: opens a submenu
+ * to the side (hover, Right arrow or click) instead of running `onSelect`. */
+export type MenuItem = {
+  label: string
+  icon?: LucideIcon
+  shortcut?: string
+  checked?: boolean
+  disabled?: boolean
+  danger?: boolean
+  children?: MenuGroup[]
+  onSelect?: () => void
+}
 export type MenuGroup = { label?: string; items: MenuItem[] }
 
 type Props = {
@@ -15,6 +26,11 @@ type Props = {
   searchable?: boolean
   /** Muted text under the items (e.g. a word count). */
   footer?: ReactNode
+  /** Content above the items (e.g. a name field). */
+  header?: ReactNode
+  /** A submenu: opens beside `anchor` (a row) instead of below it. */
+  side?: boolean
+  width?: string
 }
 
 /** The event as a shortcut label ("Del", "Ctrl+D"). Physical keys, so it works with a Thai layout too. */
@@ -22,11 +38,12 @@ const shortcutOf = (e: React.KeyboardEvent) =>
   (e.ctrlKey || e.metaKey ? 'Ctrl+' : '') + (e.key === 'Delete' ? 'Del' : e.code.startsWith('Key') ? e.code.slice(3) : e.key)
 
 /** The one menu style (Notion's block menu): optional search, muted group labels, icon + label + shortcut rows. */
-export default function Menu({ label, groups, anchor, onClose, searchable, footer }: Props) {
+export default function Menu({ label, groups, anchor, onClose, searchable, footer, header, side, width = 'w-60' }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const id = useId()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  const [sub, setSub] = useState<{ item: MenuItem; at: DOMRect }>() // open submenu
   const q = query.trim().toLowerCase()
   const shown = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(q)) })).filter((g) => g.items.length)
   const items = shown.flatMap((g) => g.items)
@@ -36,19 +53,30 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
     const el = ref.current!
     if (anchor) {
       el.showPopover()
-      // Below the anchor, flipped above or pulled left when it would leave the window.
       const { width, height } = el.getBoundingClientRect()
-      const below = anchor.bottom + 4 + height <= innerHeight
-      el.style.top = `${Math.max(8, below ? anchor.bottom + 4 : anchor.top - 4 - height)}px`
-      el.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - width - 8))}px`
+      if (side) {
+        // Beside the row: to the right, or to the left when there is no room.
+        const right = anchor.right + 4 + width <= innerWidth
+        el.style.top = `${Math.max(8, Math.min(anchor.top - 5, innerHeight - height - 8))}px`
+        el.style.left = `${Math.max(8, right ? anchor.right + 4 : anchor.left - 4 - width)}px`
+      } else {
+        // Below the anchor, flipped above or pulled left when it would leave the window.
+        const below = anchor.bottom + 4 + height <= innerHeight
+        el.style.top = `${Math.max(8, below ? anchor.bottom + 4 : anchor.top - 4 - height)}px`
+        el.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - width - 8))}px`
+      }
     }
     ;(el.querySelector('input') ?? el).focus()
-  }, [anchor])
+  }, [anchor, side])
 
-  function select(item: MenuItem) {
+  const rowOf = (i: number) => ref.current!.querySelector(`[id="${id}-${i}"]`)!.getBoundingClientRect()
+
+  function select(item: MenuItem, i = items.indexOf(item)) {
+    if (item.disabled) return
+    if (item.children) return setSub({ item, at: rowOf(i) })
     if (anchor) ref.current!.hidePopover() // fires onToggle -> onClose
     else onClose?.()
-    item.onSelect()
+    item.onSelect?.()
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -64,7 +92,13 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
       setActive((a) => (a + step + items.length) % Math.max(items.length, 1))
     } else if (e.key === 'Enter' && items[active]) {
       e.preventDefault()
-      select(items[active])
+      select(items[active], active)
+    } else if (e.key === 'ArrowRight' && items[active]?.children) {
+      e.preventDefault()
+      select(items[active], active)
+    } else if (e.key === 'ArrowLeft' && side) {
+      e.preventDefault()
+      ref.current!.hidePopover()
     } else if (e.key === 'Escape' && !anchor) onClose?.() // popovers close on Esc by themselves
   }
 
@@ -78,10 +112,14 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
       role={search ? undefined : 'menu'}
       aria-activedescendant={search || !items.length ? undefined : `${id}-${active}`}
       onToggle={(e) => (e as unknown as ToggleEvent).newState === 'closed' && onClose?.()}
-      onKeyDown={onKeyDown}
+      onKeyDown={(e) => {
+        e.stopPropagation() // a submenu's keys stay in the submenu
+        onKeyDown(e)
+      }}
       onClick={(e) => e.stopPropagation()} // React bubbles through the portal-less popover to the trigger's row
-      className={`${panel} ${anchor ? 'fixed inset-auto m-0' : 'relative'} w-60 overflow-hidden p-0 outline-none transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
+      className={`${panel} ${anchor ? 'fixed inset-auto m-0' : 'relative'} ${width} overflow-hidden p-0 outline-none transition-[opacity,translate] duration-150 ease-out starting:-translate-y-1 starting:opacity-0`}
     >
+      {header}
       {search && (
         <label className="flex items-center gap-2 border-b border-neutral-200 px-3">
           <Search size={14} className="shrink-0 text-neutral-400" />
@@ -110,14 +148,31 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
                 <MenuRow
                   key={item.label}
                   id={`${id}-${i}`}
-                  role={search ? 'option' : 'menuitem'}
+                  role={search ? 'option' : item.checked === undefined ? 'menuitem' : 'menuitemradio'}
                   aria-selected={search ? i === active : undefined}
-                  active={i === active}
+                  aria-checked={search ? undefined : item.checked}
+                  aria-disabled={item.disabled || undefined}
+                  aria-haspopup={item.children ? 'menu' : undefined}
+                  aria-expanded={item.children ? sub?.item === item : undefined}
+                  active={i === active && !item.disabled}
                   icon={item.icon}
                   label={item.label}
-                  hint={item.shortcut && <kbd className={shortcut}>{item.shortcut}</kbd>}
-                  onMouseMove={() => setActive(i)}
-                  onClick={() => select(item)}
+                  className={item.disabled ? 'cursor-default opacity-40' : item.danger ? 'text-danger' : ''}
+                  hint={
+                    item.children ? (
+                      <ChevronRight size={14} className="ml-auto shrink-0 text-neutral-500" />
+                    ) : item.checked ? (
+                      <Check size={16} className="ml-auto shrink-0 text-accent" />
+                    ) : (
+                      item.shortcut && <kbd className={shortcut}>{item.shortcut}</kbd>
+                    )
+                  }
+                  onMouseMove={() => {
+                    setActive(i)
+                    if (item.children && sub?.item !== item && !item.disabled) setSub({ item, at: rowOf(i) })
+                    else if (!item.children && sub) setSub(undefined)
+                  }}
+                  onClick={() => select(item, i)}
                 />
               )
             })}
@@ -126,6 +181,22 @@ export default function Menu({ label, groups, anchor, onClose, searchable, foote
         {!items.length && <div className="px-2 py-1.5 text-sm text-neutral-500">No results</div>}
       </div>
       {footer && <div className="border-t border-neutral-200 px-3 py-2 text-xs text-neutral-500">{footer}</div>}
+      {sub && (
+        // Rendered inside this popover, so opening it keeps this one open (nested popovers).
+        <Menu
+          key={sub.item.label}
+          side
+          label={sub.item.label}
+          anchor={sub.at}
+          groups={sub.item.children!.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, onSelect: () => select(c) })) }))}
+          searchable={false}
+          width="w-52"
+          onClose={() => {
+            setSub(undefined)
+            ref.current?.focus()
+          }}
+        />
+      )}
     </div>
   )
 }

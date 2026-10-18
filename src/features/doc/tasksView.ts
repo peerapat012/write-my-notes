@@ -1,6 +1,7 @@
 import { Plugin } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view'
 import { $prose } from '@milkdown/kit/utils'
+import { openMenu } from '@/components/openMenu'
 import { parseTasks, serializeTasks, statusOf, STATUSES, type Task } from './tasks'
 
 // Crepe's code block preview is sanitized HTML (no inputs), so a ```tasks block gets its own widget instead: the
@@ -17,6 +18,7 @@ const icon = (d: string, size = 14) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
 const X = '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 const PLUS = '<path d="M5 12h14"/><path d="M12 5v14"/>'
+const CHEVRON = '<path d="m6 9 6 6 6-6"/>'
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const e = document.createElement(tag)
@@ -36,7 +38,7 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
   root.append(head)
 
   tasks.forEach((task, i) => {
-    const row = el('div', 'tasks-row grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,12rem)_1.75rem] items-center gap-2 border-b border-neutral-200 px-3 py-1.5')
+    const row = el('div', 'tasks-row grid transition-colors duration-150 hover:bg-neutral-50 grid-cols-[minmax(0,1fr)_9rem_minmax(0,12rem)_1.75rem] items-center gap-2 border-b border-neutral-200 px-3 py-1.5')
 
     const name = el('input', 'min-w-0 rounded bg-transparent px-1 py-0.5 outline-none hover:bg-neutral-100 focus:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-accent')
     name.value = task.name
@@ -46,11 +48,14 @@ function render(tasks: Task[], commit: (tasks: Task[]) => void) {
     name.onkeydown = (e) => e.key === 'Enter' && name.blur()
 
     const shown = statusOf(task.status)
-    const status = el('select', `w-fit cursor-pointer appearance-none rounded-full px-2.5 py-0.5 text-xs font-medium outline-offset-2 ${PILL[shown]}`)
-    status.setAttribute('aria-label', 'Status')
+    const status = el('button', `inline-flex w-fit cursor-pointer items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-xs font-medium outline-offset-2 ${PILL[shown]}`, task.status || shown)
+    status.type = 'button'
+    status.setAttribute('aria-label', `Status: ${task.status || shown}`)
+    status.setAttribute('aria-haspopup', 'menu')
+    status.insertAdjacentHTML('beforeend', icon(CHEVRON, 12))
     // An unknown status is kept as written until the user picks one.
-    for (const s of STATUSES) status.append(new Option(s, s, false, s === shown))
-    status.onchange = () => edit(i, { status: status.value })
+    status.onclick = () =>
+      openMenu(status, 'Status', [{ items: STATUSES.map((s) => ({ label: s, checked: s === task.status, onSelect: () => s !== task.status && edit(i, { status: s }) })) }])
 
     const tags = el('div', 'flex min-w-0 flex-wrap items-center gap-1')
     for (const tag of task.tags) {
