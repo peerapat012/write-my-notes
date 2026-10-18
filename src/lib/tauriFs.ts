@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { fileSearchTexts } from '@/features/search/boardText'
 import { parseIcon, type Entry } from '@/features/sidebar/tree'
+import { originalPath, restorePath, topLevel, trashedPages, trashPaths, TRASH } from './trash'
 import { assetName, moveWithLinks, newPageContent, segments, splitPath, type Vault } from './fs'
 
 const ROOT_KEY = 'write-my-notes:vault'
@@ -36,6 +37,15 @@ async function tauriVault(root: string): Promise<Vault> {
   const read = async (path: string) => readTextFile(await abs(root, path))
   const write = async (path: string, data: string | Blob) =>
     typeof data === 'string' ? writeTextFile(await abs(root, path), data) : writeFile(await abs(root, path), new Uint8Array(await data.arrayBuffer()))
+  const io = {
+    has: async (path: string) => exists(await abs(root, path)),
+    moveEntry: async (a: string, b: string) => {
+      await mkdir(await abs(root, splitPath(b)[0]), { recursive: true })
+      await rename(await abs(root, a), await abs(root, b))
+    },
+    remove: async (path: string) => remove(await abs(root, path), { recursive: true }),
+    list: () => listEntries(root),
+  }
   return {
     name: root.split(/[\\/]/).filter(Boolean).at(-1) ?? root,
     list: () => listEntries(root),
@@ -65,10 +75,7 @@ async function tauriVault(root: string): Promise<Vault> {
       await moveWithLinks(await listEntries(root), from, to, {
         read,
         write,
-        moveEntry: async (a, b) => {
-          await mkdir(await abs(root, splitPath(b)[0]), { recursive: true })
-          await rename(await abs(root, a), await abs(root, b))
-        },
+        moveEntry: io.moveEntry,
       })
     },
 
@@ -78,6 +85,11 @@ async function tauriVault(root: string): Promise<Vault> {
         if (await exists(file)) await remove(file, { recursive: true })
       }
     },
+
+    trash: (paths) => trashPaths(io, paths),
+    restore: (path) => restorePath(io, path),
+    listTrash: async () =>
+      topLevel(trashedPages((await listEntries(root, TRASH).catch(() => [])).map((e) => ({ ...e, path: originalPath(e.path) })))),
   }
 }
 

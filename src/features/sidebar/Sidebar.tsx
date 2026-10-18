@@ -112,6 +112,11 @@ export default function Sidebar({ root, stored, loading, tree, reopen, pickFolde
         <button className={footerRow} onClick={pickFolder}>
           <FolderOpen size={16} className="text-neutral-500" /> {root ? 'Open another folder' : 'Open folder'}
         </button>
+        {root && (
+          <button className={`${footerRow} ${props.page === '.trash' ? 'bg-neutral-200 text-neutral-900' : ''}`} onClick={() => props.go('.trash')}>
+            <Trash2 size={16} className="text-neutral-500" /> Trash
+          </button>
+        )}
         <button className={footerRow} onClick={openSettings}>
           <SettingsIcon size={16} className="text-neutral-500" /> Settings
         </button>

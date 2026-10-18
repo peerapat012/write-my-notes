@@ -19,6 +19,7 @@ import type { SearchIndex } from '@/features/search/search'
 import { loadSettings, saveSettings, type Settings } from '@/features/settings/settings'
 import SettingsDialog from '@/features/settings/SettingsDialog'
 import GitFooter from '@/features/git/GitFooter'
+import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
 import { buildTree, deletion, type Entry, type TreeNode } from '@/features/sidebar/tree'
 
@@ -183,9 +184,9 @@ export default function App() {
           setPage(null)
         }
       }
-      await root.delete(paths)
+      await root.trash(paths)
     } catch (e) {
-      alert(`Could not delete: ${e}`)
+      alert(`Could not move to Trash: ${e}`)
     }
     await open(root)
   }
@@ -236,7 +237,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col text-sm">
-      {isTauri && <TitleBar title={page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
+      {isTauri && <TitleBar title={page === '.trash' ? 'Trash' : page ? page.slice(page.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, '') : 'Notedflow'} />}
       <div className="flex min-h-0 flex-1">
         {sidebar ? (
           <Sidebar
@@ -287,6 +288,8 @@ export default function App() {
             />
           ) : root && page?.endsWith('.excalidraw') ? (
             <BoardPage key={page + rev} vault={root} zoomTo={zoomTo} onSave={(boardTexts: BoardText[]) => setEntries((es) => es.map((e) => (e.path === page ? { ...e, boardTexts } : e)))} openSettings={() => setShowSettings(true)} path={page} dark={dark} model={settings.model} onSummary={(doc) => saveSummary(page, doc)} go={go} onRename={(name) => rename(page, name)} />
+          ) : root && page === '.trash' ? (
+            <TrashPage vault={root} onChange={() => open(root)} />
           ) : loading ? null : root ? (
             <EmptyState icon={FileText} title="No page open" actions={newPage}>
               Pick a page in the sidebar, or press <kbd className="font-sans font-medium text-neutral-700">Ctrl+K</kbd> to search.
@@ -359,18 +362,18 @@ export default function App() {
           </Dialog>
         )}
         {deleting && (
-          <Dialog aria-label={`Delete ${deleting.name}`} onClose={() => setDeleting(undefined)}>
-            <h2 className="font-semibold">Delete “{deleting.name}”?</h2>
+          <Dialog aria-label={`Move ${deleting.name} to Trash`} onClose={() => setDeleting(undefined)}>
+            <h2 className="font-semibold">Move “{deleting.name}” to Trash?</h2>
             <p className="mt-2 text-neutral-700">
-              {!!deletingPages && `This also deletes ${deletingPages} page${deletingPages > 1 ? 's' : ''} inside it. `}
-              The files are removed from disk. Use git to get them back.
+              {!!deletingPages && `This also moves ${deletingPages} page${deletingPages > 1 ? 's' : ''} inside it. `}
+              Restore it from Trash in the sidebar.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button autoFocus className={ghostButton} onClick={() => setDeleting(undefined)}>
                 Cancel
               </button>
               <button className={dangerButton} onClick={() => remove(deleting)}>
-                Delete
+                Move to Trash
               </button>
             </div>
           </Dialog>

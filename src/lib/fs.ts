@@ -1,6 +1,7 @@
 import { fileSearchTexts } from '@/features/search/boardText'
 import { movedPath, rewriteLinks } from './links'
 import { parseIcon, type Entry } from '@/features/sidebar/tree'
+import { restorePath, topLevel, trashedPages, trashPaths } from './trash'
 
 // Chromium-only File System Access bits missing from lib.dom.
 declare global {
@@ -27,6 +28,12 @@ export interface Vault {
   move(from: string, to: string): Promise<void>
   /** Permanently removes files and folders (recursively). Paths that are already gone are skipped. */
   delete(paths: string[]): Promise<void>
+  /** Moves files and folders into `.trash/`, keeping their paths. Paths that are already gone are skipped. */
+  trash(paths: string[]): Promise<void>
+  /** Original paths of the trashed pages (top level of each trashed tree). */
+  listTrash(): Promise<string[]>
+  /** Moves a trashed page and its child folder back; adds " (restored)" if the path is taken. Returns the new path. */
+  restore(path: string): Promise<string>
   /** Writes an image to `assets/img-<id>.<ext>` and returns that root-relative path. */
   saveAsset(image: Blob): Promise<string>
 }
@@ -186,6 +193,29 @@ async function moveEntry(root: FileSystemDirectoryHandle, from: string, to: stri
 export function fsAccess(root: FileSystemDirectoryHandle): Vault {
   const read = async (path: string) => (await (await getFile(root, path)).getFile()).text()
   const write = async (path: string, data: string | Blob) => writeHandle(await getFile(root, path), data)
+  const del = async (path: string) => {
+    const [dir, name] = splitPath(path)
+    try {
+      await (await dirAt(root, dir)).removeEntry(name, { recursive: true })
+    } catch (e) {
+      if ((e as Error).name !== 'NotFoundError') throw e
+    }
+  }
+  const io = {
+    has: async (path: string) => {
+      const [dir, name] = splitPath(path)
+      try {
+        const parent = await dirAt(root, dir)
+        await parent.getFileHandle(name).catch(() => parent.getDirectoryHandle(name))
+        return true
+      } catch {
+        return false
+      }
+    },
+    moveEntry: (a: string, b: string) => moveEntry(root, a, b),
+    remove: del,
+    list: () => listEntries(root),
+  }
   return {
     name: root.name,
     list: () => listEntries(root),
@@ -214,14 +244,11 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
     },
 
     async delete(paths) {
-      for (const path of paths) {
-        const [dir, name] = splitPath(path)
-        try {
-          await (await dirAt(root, dir)).removeEntry(name, { recursive: true })
-        } catch (e) {
-          if ((e as Error).name !== 'NotFoundError') throw e
-        }
-      }
+      for (const path of paths) await del(path)
     },
+
+    trash: (paths) => trashPaths(io, paths),
+    restore: (path) => restorePath(io, path),
+    listTrash: async () => topLevel(trashedPages(await listEntries(await dirAt(root, '.trash')).catch(() => []))),
   }
 }
