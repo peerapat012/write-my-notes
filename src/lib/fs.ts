@@ -15,6 +15,8 @@ declare global {
 /** All file access goes through this. Paths are strings relative to the notes folder ('' = root). */
 export interface Vault {
   name: string
+  /** Tells notes folders apart for per-folder settings: the folder name on the web, its path on the desktop. */
+  id: string
   list(): Promise<Entry[]>
   read(path: string): Promise<string>
   readBlob(path: string): Promise<Blob>
@@ -219,6 +221,7 @@ export function fsAccess(root: FileSystemDirectoryHandle): Vault {
   }
   return {
     name: root.name,
+    id: root.name,
     list: () => listEntries(root),
     read,
     readBlob: async (path) => (await getFile(root, path)).getFile(),

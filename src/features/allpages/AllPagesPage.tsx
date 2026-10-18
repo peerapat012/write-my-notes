@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, FileText, Presentation } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileText, Presentation, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import PageIcon from '@/components/PageIcon'
@@ -16,10 +16,10 @@ const COLUMNS = 'grid-cols-[2rem_minmax(0,1fr)_minmax(0,10rem)_7rem_9rem]'
 
 const updatedLabel = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-type Props = { entries: Entry[]; go: (path: string) => void }
+type Props = { entries: Entry[]; go: (path: string) => void; favorites: Set<string>; toggleFavorite: (path: string) => void }
 
 /** Every doc and board in one list: tabs by type, sortable columns, grouped by last change while sorted by Updated. */
-export default function AllPagesPage({ entries, go }: Props) {
+export default function AllPagesPage({ entries, go, favorites, toggleFavorite }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'updated', dir: 'desc' })
   const all = useMemo(() => buildRows(entries), [entries])
@@ -79,7 +79,7 @@ export default function AllPagesPage({ entries, go }: Props) {
             return (
               <div key={row.path} role="rowgroup">
                 {heading && <div className="px-2 pt-5 pb-1 text-xs font-medium text-neutral-500">{heading}</div>}
-                <Row row={row} go={go} />
+                <Row row={row} go={go} starred={favorites.has(row.path)} onStar={() => toggleFavorite(row.path)} />
               </div>
             )
           })}
@@ -89,20 +89,33 @@ export default function AllPagesPage({ entries, go }: Props) {
   )
 }
 
-function Row({ row, go }: { row: PageRow; go: (path: string) => void }) {
+function Row({ row, go, starred, onStar }: { row: PageRow; go: (path: string) => void; starred: boolean; onStar: () => void }) {
   return (
-    <button
+    <div
       role="row"
       onClick={() => go(row.path)}
-      className={`grid w-full ${COLUMNS} items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors duration-150 hover:bg-neutral-100`}
+      className={`grid w-full ${COLUMNS} cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-neutral-100`}
     >
-      <span role="cell" />
+      <span role="cell">
+        <button
+          aria-label={starred ? `Remove ${row.title} from favorites` : `Add ${row.title} to favorites`}
+          aria-pressed={starred}
+          title={starred ? 'Remove from favorites' : 'Add to favorites'}
+          className={`grid size-6 place-items-center rounded transition-colors duration-150 hover:bg-neutral-200 ${starred ? 'text-accent' : 'text-neutral-400'}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onStar()
+          }}
+        >
+          <Star size={15} fill={starred ? 'currentColor' : 'none'} />
+        </button>
+      </span>
       <span role="cell" className="flex min-w-0 items-center gap-2.5">
         <span className="grid size-5 shrink-0 place-items-center">
           <PageIcon icon={row.icon} color={row.iconColor} fallback={row.type === 'doc' ? FileText : Presentation} />
         </span>
-        <span className="min-w-0">
-          <span className="block truncate font-medium">{row.title}</span>
+        <span className="min-w-0 text-left">
+          <button className="block max-w-full truncate font-medium outline-offset-2">{row.title}</button>
           {row.preview && <span className="block truncate text-xs text-neutral-500">{row.preview}</span>}
         </span>
       </span>
@@ -120,6 +133,6 @@ function Row({ row, go }: { row: PageRow; go: (path: string) => void }) {
       <span role="cell" className="text-neutral-700 tabular-nums">
         {updatedLabel(row.updated)}
       </span>
-    </button>
+    </div>
   )
 }

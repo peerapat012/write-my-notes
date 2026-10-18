@@ -11,6 +11,7 @@ import {
   Presentation,
   RotateCcw,
   Search,
+  Star,
   Settings as SettingsIcon,
   SquarePen,
   Trash2,
@@ -30,6 +31,9 @@ type Remove = (node: TreeNode) => void
 
 type SidebarProps = {
   root?: Vault
+  favorites: TreeNode[] // starred pages, in the order added
+  favoriteSet: Set<string>
+  toggleFavorite: (path: string) => void
   stored?: { name: string }
   loading: boolean
   tree: TreeNode[]
@@ -58,7 +62,7 @@ const newPage = (create: Create, dir: string): MenuGroup[] => [
 const footerRow =
   'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-neutral-700 transition-colors duration-150 hover:bg-neutral-100 hover:text-neutral-900'
 
-export default function Sidebar({ root, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
+export default function Sidebar({ root, favorites, stored, loading, tree, reopen, pickFolder, openSettings, openSearch, hide, git, ...props }: SidebarProps) {
   const { create, move } = props
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
@@ -90,6 +94,24 @@ export default function Sidebar({ root, stored, loading, tree, reopen, pickFolde
         >
           {root.name}
         </div>
+      )}
+      {favorites.length > 0 && (
+        <nav aria-label="Favorites" className="max-h-48 shrink-0 overflow-auto px-2 pb-1">
+          <div className="px-2 pt-2 pb-1 text-xs font-medium text-neutral-500">Favorites</div>
+          {favorites.map((f) => (
+            <button
+              key={f.path}
+              aria-current={props.page === f.path ? 'page' : undefined}
+              className={`flex h-7 w-full items-center gap-2 rounded-md px-2 text-left transition-colors duration-150 ${props.page === f.path ? 'bg-accent-soft font-medium text-neutral-900' : 'text-neutral-700 hover:bg-neutral-100'}`}
+              onClick={() => props.go(f.path)}
+            >
+              <span className="grid size-5 shrink-0 place-items-center">
+                <PageIcon icon={f.icon} color={f.iconColor} fallback={f.type === 'doc' ? FileText : Presentation} />
+              </span>
+              <span className="truncate">{f.name}</span>
+            </button>
+          ))}
+        </nav>
       )}
       <nav aria-label="Pages" className="min-h-0 flex-1 overflow-auto px-2 pb-2">
         {loading ? (
@@ -133,6 +155,8 @@ export default function Sidebar({ root, stored, loading, tree, reopen, pickFolde
 }
 
 type TreeProps = {
+  favoriteSet: Set<string>
+  toggleFavorite: (path: string) => void
   nodes: TreeNode[]
   depth: number
   page: string | null
@@ -167,7 +191,7 @@ const rowTarget =
   "min-w-0 flex-1 truncate text-left outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
 
 function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'nodes'>) {
-  const { page, go, create, move, remove } = props
+  const { page, go, create, move, remove, favoriteSet, toggleFavorite } = props
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(true)
   const isPage = node.type !== 'folder'
@@ -238,6 +262,9 @@ function Node({ node, depth, ...props }: { node: TreeNode } & Omit<TreeProps, 'n
             <MenuButton
               label={`${node.name} actions`}
               groups={[
+                ...(isPage
+                  ? [{ items: [{ label: favoriteSet.has(node.path) ? 'Remove from favorites' : 'Add to favorites', icon: Star, onSelect: () => toggleFavorite(node.path) }] }]
+                  : []),
                 { items: [{ label: 'Rename', icon: Pencil, onSelect: () => setEditing(true) }] },
                 { items: [{ label: 'Delete', icon: Trash2, onSelect: () => remove(node) }] },
               ]}

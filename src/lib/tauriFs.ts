@@ -47,6 +47,7 @@ async function tauriVault(root: string): Promise<Vault> {
     list: () => listEntries(root),
   }
   return {
+    id: root,
     name: root.split(/[\\/]/).filter(Boolean).at(-1) ?? root,
     list: () => listEntries(root),
     read,

@@ -24,6 +24,7 @@ import HistoryTab from '@/features/history/HistoryTab'
 import VersionView, { type Viewing } from '@/features/history/VersionView'
 import { showFile, type Version } from '@/lib/git'
 import GraphPage from '@/features/history/GraphPage'
+import { dropFavorites, loadFavorites, moveFavorites, saveFavorites, toggleFavorite } from '@/features/favorites/favorites'
 import AllPagesPage from '@/features/allpages/AllPagesPage'
 import TrashPage from '@/features/trash/TrashPage'
 import Sidebar from '@/features/sidebar/Sidebar'
@@ -54,7 +55,22 @@ export default function App() {
     [entries],
   )
   const icons = useMemo(() => new Map(entries.map((e) => [e.path, { icon: e.icon, iconColor: e.iconColor }])), [entries])
+  const [favs, setFavs] = useState<string[]>([]) // favorite page paths of the open notes folder
   const [page, setPage] = useState(currentPage)
+  const favSet = useMemo(() => new Set(favs), [favs])
+  // Starred pages that still exist, in the order added.
+  const favorites = useMemo(
+    () =>
+      favs.filter((p) => exists.has(p)).map((path): TreeNode => ({
+        path,
+        name: path.slice(path.lastIndexOf('/') + 1).replace(/\.(md|excalidraw)$/, ''),
+        type: path.endsWith('.md') ? 'doc' : 'board',
+        icon: icons.get(path)?.icon,
+        iconColor: icons.get(path)?.iconColor,
+        children: [],
+      })),
+    [favs, exists, icons],
+  )
   const [zoomTo, setZoomTo] = useState<{ id: string }>() // board element a search hit asked to zoom to
   const [rev, setRev] = useState(0) // bumped after a move so the open page re-reads from disk
   const [settings, setSettings] = useState(() => loadSettings())
@@ -115,8 +131,17 @@ export default function App() {
     setRev((r) => r + 1)
   }
 
+  /** Changes the open folder's favorites, read fresh from storage so a stale render cannot undo another change. */
+  function updateFavs(change: (paths: string[]) => string[]) {
+    if (!root) return
+    const next = change(loadFavorites(root.id))
+    saveFavorites(root.id, next)
+    setFavs(next)
+  }
+
   async function open(dir: Vault) {
     setRoot(dir)
+    setFavs(loadFavorites(dir.id))
     setEntries(await dir.list())
     setLoading(false)
   }
@@ -191,6 +216,7 @@ export default function App() {
       alert(`Could not move: ${e}`)
       return open(root)
     }
+    updateFavs((f) => moveFavorites(f, from, to))
     await open(root)
     const next = page && movedPath(page, from, to)
     if (next !== page) history.replaceState(null, '', pageUrl(next!))
@@ -217,6 +243,7 @@ export default function App() {
         }
       }
       await root.trash(paths)
+      updateFavs((f) => dropFavorites(f, paths))
     } catch (e) {
       alert(`Could not move to Trash: ${e}`)
     }
@@ -280,6 +307,9 @@ export default function App() {
         {sidebar ? (
           <Sidebar
             root={root}
+            favorites={favorites}
+            favoriteSet={favSet}
+            toggleFavorite={(path) => updateFavs((f) => toggleFavorite(f, path))}
             stored={stored}
             loading={loading}
             tree={tree}
@@ -332,7 +362,7 @@ export default function App() {
           ) : root && page === '.history' && isTauri && settings.mode === 'advanced' ? (
             <GraphPage vault={root} dark={dark} refreshKey={historyRev} />
           ) : root && page === '.all' ? (
-            <AllPagesPage entries={entries} go={go} />
+            <AllPagesPage entries={entries} go={go} favorites={favSet} toggleFavorite={(path) => updateFavs((f) => toggleFavorite(f, path))} />
           ) : root && page === '.trash' ? (
             <TrashPage vault={root} entries={entries} onChange={() => open(root)} />
           ) : loading ? null : root ? (
